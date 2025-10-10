@@ -39,6 +39,11 @@ int main() {
         fprintf(stderr, "could not read [%d][%d]\n", i, j);
         fclose(file);
         return 1;
+      } else if (i == j && matrix[i][j] != 0) {
+        fprintf(stderr,
+                "distance greater than 0 between same vertice in [%d][%d]\n", i,
+                j);
+        return 1;
       }
     }
   }
