@@ -14,7 +14,7 @@ int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Not enough arguments");
+        fprintf(stderr, "Not enough arguments!\n");
         return 1;
     }
     Matrix matrix = read_matrix_from_file(argv[1]);
