@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -9,6 +10,7 @@ typedef struct {
 Matrix read_matrix_from_file(char* file_path);
 void print_matrix(Matrix matrix);
 void destroy_matrix(Matrix matrix);
+int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -17,7 +19,13 @@ int main(int argc, char **argv) {
     }
     Matrix matrix = read_matrix_from_file(argv[1]);
     print_matrix(matrix);
+
+    Matrix matrix_mul;
+    special_matrix_mul(matrix, matrix, &matrix_mul);
+    print_matrix(matrix_mul);
+
     destroy_matrix(matrix);
+    destroy_matrix(matrix_mul);
     return 0;
 }
 
@@ -62,4 +70,34 @@ void print_matrix(Matrix matrix) {
 
 void destroy_matrix(Matrix matrix) {
     if (matrix.values != NULL) free(matrix.values);
+}
+
+// given algorythm for matrix mul using dynamic programming
+int special_matrix_mul(Matrix a, Matrix b, Matrix *buf) {
+  if (a.n != b.n) {
+    fprintf(stderr, "matrix sizes must be same: %d != %d\n", a.n, b.n);
+    return 1;
+  }
+
+  Matrix c = (Matrix) {(int**) malloc(sizeof(int*) * a.n), a.n};
+  int help;
+
+  for (int i = 0; i < c.n; i++) {
+      c.values[i] = (int*) malloc(sizeof(int) * c.n);
+      for (int j = 0; j < c.n; j++) {
+          c.values[i][j] = INT_MAX;
+          for (int k = 0; k < c.n; k++) {
+              if (a.values[i][k] != INT_MAX && b.values[k][j] != INT_MAX) {
+                  help = (a.values[i][k] + b.values[k][j]);
+                  if (c.values[i][j] > help) {
+                      c.values[i][j] = help;
+                  }
+              }
+          }
+      }
+  }
+
+  *buf = c;
+
+  return 0;
 }
