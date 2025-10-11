@@ -63,7 +63,6 @@ int read_matrix(FILE *file, int **matrix, int size) {
         fprintf(stderr, "could not read [%d][%d]\n", i, j);
         return 0;
       }
-      // Validate diagonal elements
       if (i == j && matrix[i][j] != 0) {
         fprintf(stderr,
                 "distance greater than 0 between same vertice in [%d][%d]\n", i,
@@ -109,6 +108,16 @@ int **parse_matrix_file(const char *filename, int *out_size) {
   return matrix;
 }
 
+int **copy_matrix(int **m, int size) {
+  int **copy = allocate_matrix(size);
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      copy[i][j] = m[i][j];
+    }
+  }
+  return copy;
+}
+
 // given algorythm for matrix mul using dynamic programming
 int **special_matrix_mul(int **a, int a_size, int **b, int b_size) {
   if (a_size != b_size) {
@@ -140,16 +149,6 @@ int **special_matrix_mul(int **a, int a_size, int **b, int b_size) {
   return c;
 }
 
-int **copy_matrix(int **m, int size) {
-  int **copy = allocate_matrix(size);
-  for (int i = 0; i < size; i++) {
-    for (int j = 0; j < size; j++) {
-      copy[i][j] = m[i][j];
-    }
-  }
-  return copy;
-}
-
 int **slow_apsp(int **w, int size) {
   int k, **d_next;
 
@@ -169,9 +168,36 @@ int **slow_apsp(int **w, int size) {
   return d;
 }
 
+int **repeated_squaring_apsp(int **w, int size) {
+  int m, **d_2m;
+  int **d_m = copy_matrix(w, size);
+
+  if (d_m == NULL) {
+    fprintf(stderr, "Failed to copy initial matrix\n");
+    return NULL;
+  }
+
+  m = 1;
+
+  while (m < size - 1) {
+    d_2m = special_matrix_mul(d_m, size, d_m, size);
+    if (d_2m == NULL) {
+      free_matrix(d_m, size);
+      fprintf(stderr, "special_matrix_mul failed at m=%d\n", m);
+      return NULL;
+    }
+
+    m *= 2;
+    free_matrix(d_m, size);
+    d_m = d_2m;
+  }
+
+  return d_m;
+}
+
 int main() {
   int size;
-  int **w = parse_matrix_file("matrix_examples/input5", &size);
+  int **w = parse_matrix_file("matrix_examples/input600", &size);
   if (w == NULL) {
     return 1;
   }
@@ -179,7 +205,7 @@ int main() {
   printf("size of matrix: %d\n", size);
 
   print_matrix(w, size, "w");
-  int **d = slow_apsp(w, size);
+  int **d = repeated_squaring_apsp(w, size);
   if (d == NULL) {
     fprintf(stderr, "apsp failed\n");
     free_matrix(w, size);
