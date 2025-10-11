@@ -4,6 +4,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+  char *i;
+  char *o;
+} i_o;
+
+i_o file_pairs[] = {
+    {.i = "/matrix_examples/input5", .o = "/matrix_examples/output5"},
+    {.i = "/matrix_examples/input6", .o = "/matrix_examples/output6"},
+    {.i = "/matrix_examples/input300", .o = "/matrix_examples/output300"},
+    {.i = "/matrix_examples/input600", .o = "/matrix_examples/output600"},
+    /*
+    {.i = "/matrix_examples/input900",
+     .o = "/matrix_examples/output900"},
+    {.i = "/matrix_examples/input1200",
+     .o = "/matrix_examples/output1200"},
+     */
+};
+
 int **allocate_matrix(int size) {
   int **matrix = malloc(size * sizeof(int *));
   if (matrix == NULL) {
@@ -108,8 +126,35 @@ int **parse_matrix_file(const char *filename, int *out_size) {
   return matrix;
 }
 
+int **parse_output_file(const char *filename, int size) {
+  FILE *file = fopen(filename, "r");
+  if (file == NULL) {
+    perror("error opening file");
+    return NULL;
+  }
+
+  int **matrix = allocate_matrix(size);
+  if (matrix == NULL) {
+    fprintf(stderr, "memory allocation failed\n");
+    fclose(file);
+    return NULL;
+  }
+
+  if (!read_matrix(file, matrix, size)) {
+    free_matrix(matrix, size);
+    fclose(file);
+    return NULL;
+  }
+
+  fclose(file);
+  return matrix;
+}
+
 int **copy_matrix(int **m, int size) {
   int **copy = allocate_matrix(size);
+  if (copy == NULL) {
+    return NULL;
+  }
   for (int i = 0; i < size; i++) {
     for (int j = 0; j < size; j++) {
       copy[i][j] = m[i][j];
@@ -149,6 +194,7 @@ int **special_matrix_mul(int **a, int a_size, int **b, int b_size) {
   return c;
 }
 
+// 3 implementation sequential
 int **slow_apsp(int **w, int size) {
   int k, **d_next;
 
@@ -168,6 +214,7 @@ int **slow_apsp(int **w, int size) {
   return d;
 }
 
+// 3.1 implementation sequential
 int **repeated_squaring_apsp(int **w, int size) {
   int m, **d_2m;
   int **d_m = copy_matrix(w, size);
@@ -191,30 +238,46 @@ int **repeated_squaring_apsp(int **w, int size) {
     free_matrix(d_m, size);
     d_m = d_2m;
   }
-
   return d_m;
 }
 
 int main() {
-  int size;
+  int size, i, j;
   int **w = parse_matrix_file("matrix_examples/input600", &size);
-  if (w == NULL) {
+  int **out = parse_output_file("matrix_examples/output600", size);
+  if (w == NULL || out == NULL) {
     return 1;
   }
 
-  printf("size of matrix: %d\n", size);
+  // printf("size of matrix: %d\n", size);
+  // print_matrix(w, size, "w");
 
-  print_matrix(w, size, "w");
   int **d = repeated_squaring_apsp(w, size);
   if (d == NULL) {
     fprintf(stderr, "apsp failed\n");
     free_matrix(w, size);
     return 1;
   }
+  // print_matrix(d, size, "output computed");
+  // print_matrix(out, size, "output given");
 
-  print_matrix(d, size, "final d");
+  for (i = 0; i < size; i++) {
+    for (j = 0; j < size; j++) {
+      if (d[i][j] != out[i][j]) {
+        free_matrix(w, size);
+        free_matrix(d, size);
+        free_matrix(out, size);
+
+        printf("output didn't match!\n");
+        return 0;
+      }
+    }
+  }
+
+  printf("output matches!\n");
 
   free_matrix(w, size);
   free_matrix(d, size);
+  free_matrix(out, size);
   return 0;
 }
