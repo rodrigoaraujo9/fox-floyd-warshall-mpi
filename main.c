@@ -239,6 +239,32 @@ int **repeated_squaring_apsp(int **w, int size) {
   return d_m;
 }
 
+int **floyd_warshall_apsp(int **w, int size) {
+  // d(0)=w
+  int i, j, k, new_d;
+  int **d = copy_matrix(w, size);
+
+  if (d == NULL) {
+    fprintf(stderr, "Failed to copy initial matrix\n");
+    return NULL;
+  }
+
+  for (k = 0; k < size; k++) {
+    for (i = 0; i < size; i++) {
+      for (j = 0; j < size; j++) {
+        if (d[i][k] != INT_MAX && d[k][j] != INT_MAX) {
+          new_d = (d[i][k] + d[k][j]);
+          if (d[i][j] > new_d) {
+            d[i][j] = new_d;
+          }
+        }
+      }
+    }
+  }
+
+  return d;
+}
+
 int main() {
   int size, i, j, p, match;
 
@@ -261,7 +287,7 @@ int main() {
     // printf("size of matrix: %d\n", size);
     // print_matrix(w, size, "w");
 
-    int **d = repeated_squaring_apsp(w, size);
+    int **d = floyd_warshall_apsp(w, size);
     if (d == NULL) {
       fprintf(stderr, "apsp failed\n");
       free_matrix(w, size);
