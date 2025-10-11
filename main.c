@@ -9,16 +9,14 @@ typedef struct {
   char *o;
 } i_o;
 
-i_o file_pairs[] = {
-    {.i = "/matrix_examples/input5", .o = "/matrix_examples/output5"},
-    {.i = "/matrix_examples/input6", .o = "/matrix_examples/output6"},
-    {.i = "/matrix_examples/input300", .o = "/matrix_examples/output300"},
-    {.i = "/matrix_examples/input600", .o = "/matrix_examples/output600"},
+i_o match_i_o[] = {
+    {.i = "matrix_examples/input5", .o = "matrix_examples/output5"},
+    {.i = "matrix_examples/input6", .o = "matrix_examples/output6"},
+    {.i = "matrix_examples/input300", .o = "matrix_examples/output300"},
+    {.i = "matrix_examples/input600", .o = "matrix_examples/output600"},
     /*
-    {.i = "/matrix_examples/input900",
-     .o = "/matrix_examples/output900"},
-    {.i = "/matrix_examples/input1200",
-     .o = "/matrix_examples/output1200"},
+    {.i = "matrix_examples/input900", .o = "matrix_examples/output900"},
+    {.i = "matrix_examples/input1200", .o = "matrix_examples/output1200"},
      */
 };
 
@@ -242,42 +240,58 @@ int **repeated_squaring_apsp(int **w, int size) {
 }
 
 int main() {
-  int size, i, j;
-  int **w = parse_matrix_file("matrix_examples/input600", &size);
-  int **out = parse_output_file("matrix_examples/output600", size);
-  if (w == NULL || out == NULL) {
-    return 1;
-  }
+  int size, i, j, p, match;
 
-  // printf("size of matrix: %d\n", size);
-  // print_matrix(w, size, "w");
+  int n_pairs = sizeof(match_i_o) / sizeof(match_i_o[0]);
 
-  int **d = repeated_squaring_apsp(w, size);
-  if (d == NULL) {
-    fprintf(stderr, "apsp failed\n");
-    free_matrix(w, size);
-    return 1;
-  }
-  // print_matrix(d, size, "output computed");
-  // print_matrix(out, size, "output given");
+  for (p = 0; p < n_pairs; p++) {
+    printf("making calculations for %s", match_i_o[p].i);
 
-  for (i = 0; i < size; i++) {
-    for (j = 0; j < size; j++) {
-      if (d[i][j] != out[i][j]) {
+    int **w = parse_matrix_file(match_i_o[p].i, &size);
+    int **out = parse_output_file(match_i_o[p].o, size);
+    if (w == NULL || out == NULL) {
+      fprintf(stderr, "failed to load pair %d\n", p);
+      if (w != NULL)
         free_matrix(w, size);
-        free_matrix(d, size);
+      if (out != NULL)
         free_matrix(out, size);
-
-        printf("output didn't match!\n");
-        return 0;
-      }
+      continue;
     }
+
+    // printf("size of matrix: %d\n", size);
+    // print_matrix(w, size, "w");
+
+    int **d = repeated_squaring_apsp(w, size);
+    if (d == NULL) {
+      fprintf(stderr, "apsp failed\n");
+      free_matrix(w, size);
+      continue;
+    }
+    // print_matrix(d, size, "output computed");
+    // print_matrix(out, size, "output given");
+
+    match = 1;
+    for (i = 0; i < size; i++) {
+      for (j = 0; j < size; j++) {
+        if (d[i][j] != out[i][j]) {
+          match = 0;
+          break;
+        }
+      }
+      if (!match)
+        break;
+    }
+
+    if (match) {
+      printf("%s: output matches!\n", match_i_o[p].i);
+    } else {
+      printf("%s: output didn't match!\n", match_i_o[p].i);
+    }
+
+    free_matrix(w, size);
+    free_matrix(d, size);
+    free_matrix(out, size);
   }
 
-  printf("output matches!\n");
-
-  free_matrix(w, size);
-  free_matrix(d, size);
-  free_matrix(out, size);
   return 0;
 }
