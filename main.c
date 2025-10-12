@@ -154,9 +154,7 @@ int **copy_matrix(int **m, int size) {
     return NULL;
   }
   for (int i = 0; i < size; i++) {
-    for (int j = 0; j < size; j++) {
-      copy[i][j] = m[i][j];
-    }
+    memcpy(copy[i], m[i], size * sizeof(int));
   }
   return copy;
 }
@@ -168,22 +166,29 @@ int **special_matrix_mul(int **a, int a_size, int **b, int b_size) {
     return NULL;
   }
 
-  int **c, i, j, k, help, n = a_size;
+  int **c, i, j, k, sum, a_ik;
 
   c = allocate_matrix(a_size);
   if (c == NULL) {
     fprintf(stderr, "mem alloc failed in special_matrix_mul\n");
     return NULL;
   }
-
-  for (i = 0; i < n; i++) {
-    for (j = 0; j < n; j++) {
+  for (int i = 0; i < a_size; i++) {
+    for (int j = 0; j < a_size; j++) {
       c[i][j] = INT_MAX;
-      for (k = 0; k < n; k++) {
-        if (a[i][k] != INT_MAX && b[k][j] != INT_MAX) {
-          help = (a[i][k] + b[k][j]);
-          if (c[i][j] > help) {
-            c[i][j] = help;
+    }
+  }
+  // i k j for better cache locality and less cache misses
+  for (i = 0; i < a_size; i++) {
+    for (k = 0; k < a_size; k++) {
+      if (a[i][k] != INT_MAX) {
+        a_ik = a[i][k];
+        for (j = 0; j < a_size; j++) {
+          if (b[k][j] != INT_MAX) {
+            sum = a_ik + b[k][j];
+            if (c[i][j] > sum) {
+              c[i][j] = sum;
+            }
           }
         }
       }
@@ -287,7 +292,7 @@ int main() {
     // printf("size of matrix: %d\n", size);
     // print_matrix(w, size, "w");
 
-    int **d = floyd_warshall_apsp(w, size);
+    int **d = repeated_squaring_apsp(w, size);
     if (d == NULL) {
       fprintf(stderr, "apsp failed\n");
       free_matrix(w, size);
