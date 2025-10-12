@@ -8,7 +8,7 @@ typedef struct {
 } Matrix;
 
 Matrix read_matrix_from_file(char* file_path);
-void print_matrix(Matrix matrix);
+void print_matrix(Matrix matrix, char *title);
 void destroy_matrix(Matrix matrix);
 int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
 void copy_matrix(Matrix matrix_to_copy, Matrix* buf);
@@ -21,23 +21,23 @@ int main(int argc, char **argv) {
         return 1;
     }
     Matrix matrix = read_matrix_from_file(argv[1]);
-    print_matrix(matrix);
+    print_matrix(matrix, "Input Matrix");
 
-    Matrix matrix_mul;
-    if (special_matrix_mul(matrix, matrix, &matrix_mul) != 0) {
-        fprintf(stderr, "Failed to multiply!\n");
-    }
-    print_matrix(matrix_mul);
-
-    Matrix matrix_apsp;
-    if (slow_apsp(matrix, &matrix_apsp) != 0) {
+    Matrix matrix_slow_apsp;
+    if (slow_apsp(matrix, &matrix_slow_apsp) != 0) {
         fprintf(stderr, "Failed to apsp!\n");
     }
-    print_matrix(matrix_apsp);
+    print_matrix(matrix_slow_apsp, "Slow APSP");
+
+    Matrix matrix_rs_apsp;
+    if (slow_apsp(matrix, &matrix_rs_apsp) != 0) {
+        fprintf(stderr, "Failed to apsp!\n");
+    }
+    print_matrix(matrix_rs_apsp, "Repeated Squaring APSP");
 
     destroy_matrix(matrix);
-    destroy_matrix(matrix_mul);
-    destroy_matrix(matrix_apsp);
+    destroy_matrix(matrix_slow_apsp);
+    destroy_matrix(matrix_rs_apsp);
     return 0;
 }
 
@@ -73,8 +73,8 @@ Matrix read_matrix_from_file(char* file_path) {
     return (Matrix) { values, n };
 }
 
-void print_matrix(Matrix matrix) {
-    printf("Matrix of size (%dx%d)\n", matrix.n, matrix.n);
+void print_matrix(Matrix matrix, char *title) {
+    printf("%s (%dx%d)\n", title, matrix.n, matrix.n);
     for (int i = 0; i < matrix.n; i++) {
         for (int j = 0; j < matrix.n; j++) {
             if (matrix.values[i][j] == INT_MAX) {
