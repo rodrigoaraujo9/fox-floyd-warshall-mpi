@@ -21,7 +21,9 @@ int main(int argc, char **argv) {
     print_matrix(matrix);
 
     Matrix matrix_mul;
-    special_matrix_mul(matrix, matrix, &matrix_mul);
+    if (special_matrix_mul(matrix, matrix, &matrix_mul) != 0) {
+        fprintf(stderr, "Failed to multiply!\n");
+    }
     print_matrix(matrix_mul);
 
     destroy_matrix(matrix);
@@ -69,7 +71,12 @@ void print_matrix(Matrix matrix) {
 }
 
 void destroy_matrix(Matrix matrix) {
-    if (matrix.values != NULL) free(matrix.values);
+    if (matrix.values != NULL) {
+        for (int i = 0; i < matrix.n; i++) {
+            if (matrix.values[i] != NULL) free(matrix.values[i]);
+        }
+        free(matrix.values);
+    }
 }
 
 // given algorythm for matrix mul using dynamic programming
