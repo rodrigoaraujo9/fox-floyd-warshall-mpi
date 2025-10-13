@@ -1,3 +1,4 @@
+#include <time.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,29 +24,41 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Not enough arguments!\n");
         return 1;
     }
-    Matrix matrix = read_matrix_from_file(argv[1]);
-    print_matrix(matrix, "Input Matrix");
 
-    Matrix matrix_slow_apsp;
-    if (slow_apsp(matrix, &matrix_slow_apsp) != 0) {
-        fprintf(stderr, "Failed to apsp!\n");
-    }
-    print_matrix(matrix_slow_apsp, "Slow APSP");
+    clock_t start, end;
+
+    Matrix matrix = read_matrix_from_file(argv[1]);
+    //print_matrix(matrix, "Input Matrix");
+
+    //Matrix matrix_slow_apsp;
+    //start = clock();
+    //if (slow_apsp(matrix, &matrix_slow_apsp) != 0) {
+    //    fprintf(stderr, "Failed to apsp!\n");
+    //}
+    //end = clock();
+    //print_matrix(matrix_slow_apsp, "Slow APSP");
+    //printf("Slow APSP: Speed = %f\n", (float)(end - start) / CLOCKS_PER_SEC);
 
     Matrix matrix_rs_apsp;
+    start = clock();
     if (repeated_squaring_apsp(matrix, &matrix_rs_apsp) != 0) {
         fprintf(stderr, "Failed to apsp!\n");
     }
-    print_matrix(matrix_rs_apsp, "Repeated Squaring APSP");
+    end = clock();
+    //print_matrix(matrix_rs_apsp, "Repeated Squaring APSP");
+    printf("Repeated Squaring APSP: Speed = %f\n", (float)(end - start) / CLOCKS_PER_SEC);
 
     Matrix matrix_fw_apsp;
+    start = clock();
     if (floyd_warshall_apsp(matrix, &matrix_fw_apsp) != 0) {
         fprintf(stderr, "Failed to apsp!\n");
     }
-    print_matrix(matrix_fw_apsp, "Floyd Warshall APSP");
+    end = clock();
+    //print_matrix(matrix_fw_apsp, "Floyd Warshall APSP");
+    printf("Floyd Warshall APSP: Speed = %f\n", (float)(end - start) / CLOCKS_PER_SEC);
 
     destroy_matrix(matrix);
-    destroy_matrix(matrix_slow_apsp);
+    //destroy_matrix(matrix_slow_apsp);
     destroy_matrix(matrix_rs_apsp);
     destroy_matrix(matrix_fw_apsp);
     return 0;
