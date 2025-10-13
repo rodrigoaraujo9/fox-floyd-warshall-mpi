@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <time.h>
 #include <limits.h>
 #include <stdio.h>
@@ -8,7 +9,25 @@ typedef struct {
     int n;
 } Matrix;
 
-Matrix read_matrix_from_file(char* file_path);
+typedef struct {
+  char *i;
+  char *o;
+} IO_Files;
+
+IO_Files io_files[] = {
+    {.i = "matrix_examples/input5", .o = "matrix_examples/output5"},
+    {.i = "matrix_examples/input6", .o = "matrix_examples/output6"},
+    {.i = "matrix_examples/input300", .o = "matrix_examples/output300"},
+    {.i = "matrix_examples/input600", .o = "matrix_examples/output600"},
+    /*
+    {.i = "matrix_examples/input900", .o = "matrix_examples/output900"},
+    {.i = "matrix_examples/input1200", .o = "matrix_examples/output1200"},
+     */
+};
+
+Matrix read_input_matrix_from_file(char* file_path);
+Matrix read_output_matrix_from_file(char* file_path, int n);
+
 void print_matrix(Matrix matrix, char *title);
 void copy_matrix(Matrix matrix_to_copy, Matrix* buf);
 void destroy_matrix(Matrix matrix);
@@ -19,15 +38,17 @@ int slow_apsp(Matrix w, Matrix *buf);
 int repeated_squaring_apsp(Matrix w, Matrix *buf);
 int floyd_warshall_apsp(Matrix w, Matrix *buf);
 
+void assert_apsp(Matrix a, Matrix b, char* title);
+
 int main(int argc, char **argv) {
-    if (argc < 2) {
+    if (argc != 3) {
         fprintf(stderr, "Not enough arguments!\n");
         return 1;
     }
 
     clock_t start, end;
 
-    Matrix matrix = read_matrix_from_file(argv[1]);
+    Matrix input_file_matrix = read_input_matrix_from_file(argv[1]);
     //print_matrix(matrix, "Input Matrix");
 
     //Matrix matrix_slow_apsp;
@@ -41,7 +62,7 @@ int main(int argc, char **argv) {
 
     Matrix matrix_rs_apsp;
     start = clock();
-    if (repeated_squaring_apsp(matrix, &matrix_rs_apsp) != 0) {
+    if (repeated_squaring_apsp(input_file_matrix, &matrix_rs_apsp) != 0) {
         fprintf(stderr, "Failed to apsp!\n");
     }
     end = clock();
@@ -50,21 +71,37 @@ int main(int argc, char **argv) {
 
     Matrix matrix_fw_apsp;
     start = clock();
-    if (floyd_warshall_apsp(matrix, &matrix_fw_apsp) != 0) {
+    if (floyd_warshall_apsp(input_file_matrix, &matrix_fw_apsp) != 0) {
         fprintf(stderr, "Failed to apsp!\n");
     }
     end = clock();
     //print_matrix(matrix_fw_apsp, "Floyd Warshall APSP");
     printf("Floyd Warshall APSP: Speed = %f\n", (float)(end - start) / CLOCKS_PER_SEC);
 
-    destroy_matrix(matrix);
+    Matrix output_file_matrix = read_output_matrix_from_file(argv[2], input_file_matrix.n);
+
+    assert_apsp(matrix_rs_apsp, output_file_matrix, "Repeated Squaring APSP");
+    assert_apsp(matrix_fw_apsp, output_file_matrix, "Floyd Warshall APSP");
+
+    destroy_matrix(input_file_matrix);
+    destroy_matrix(output_file_matrix);
     //destroy_matrix(matrix_slow_apsp);
     destroy_matrix(matrix_rs_apsp);
     destroy_matrix(matrix_fw_apsp);
     return 0;
 }
 
-Matrix read_matrix_from_file(char* file_path) {
+void assert_apsp(Matrix a, Matrix b, char* title) {
+    assert(a.n == b.n);
+    for (int i = 0; i < a.n; i++) {
+        for (int j = 0; j < a.n; j++) {
+            assert(a.values[i][j] == b.values[i][j]);
+        }
+    }
+    printf("%s: Assertion for matrix of size %d was successful!\n", title, a.n);
+}
+
+Matrix read_input_matrix_from_file(char* file_path) {
     FILE *file;
     int n, **values;
 
@@ -75,6 +112,35 @@ Matrix read_matrix_from_file(char* file_path) {
 
     // scan the size of the rows and columns
     fscanf(file, "%d", &n);
+
+    // allocate space for each column of the matrix
+    values = (int **) malloc(sizeof(int*) * n);
+
+    for (int i = 0; i < n; i++) {
+        // allocate space for each line of the matrix
+        values[i] = (int*) malloc(sizeof(int) * n);
+        for (int j = 0; j < n; j++) {
+            // read the value and assign it to the correct position in the matrix
+            fscanf(file, "%d", &values[i][j]);
+            if (i != j && values[i][j] == 0) {
+                 values[i][j] = INT_MAX;
+            }
+        }
+    }
+
+    fclose(file);
+
+    return (Matrix) { values, n };
+}
+
+Matrix read_output_matrix_from_file(char* file_path, int n) {
+    FILE *file;
+    int **values;
+
+    // open the file
+    if ((file = fopen(file_path, "r")) == NULL) {
+        return (Matrix) {values, n};
+    }
 
     // allocate space for each column of the matrix
     values = (int **) malloc(sizeof(int*) * n);
