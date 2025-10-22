@@ -42,7 +42,8 @@ int floyd_warshall_apsp(Matrix w, Matrix *buf);
 
 void assert_apsp(Matrix a, Matrix b, char *title);
 
-int **get_block(int **matrix, int block_row, int block_col, int b, int n);
+void set_block(int **matrix, int block_row, int block_col, int b, int n,
+               int **block);
 void floyd(int **matrix, int **C, int **A, int **B, int b, int n);
 int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b);
 
@@ -324,18 +325,16 @@ int floyd_warshall_apsp(Matrix w, Matrix *buf) {
   return 0;
 }
 
-int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
+void set_block(int **matrix, int b_row, int b_col, int b, int n, int **block) {
   int r0 = b_row * b;
   int c0 = b_col * b;
 
   assert(r0 >= 0 && c0 >= 0);
   assert(r0 + b <= n && c0 + b <= n);
 
-  int **block = (int **)malloc(sizeof(int *) * b);
   for (int i = 0; i < b; i++) {
     block[i] = &matrix[r0 + i][c0];
   }
-  return block;
 }
 
 void floyd(int **matrix, int **C, int **A, int **B, int b, int n) {
@@ -388,29 +387,29 @@ int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b) {
 
   for (int k = 0; k < B; k++) {
     // dependant phase
-    wkk = get_block((*buf).values, k, k, b, n);
+    set_block((*buf).values, k, k, b, n, wkk);
     floyd((*buf).values, wkk, wkk, wkk, b, n);
     // partially dependant phase
     for (int j = 0; j < B; j++) {
       if (j == k)
         continue;
-      wkj = get_block((*buf).values, k, j, b, n);
-      wkk = get_block((*buf).values, k, k, b, n);
+      set_block((*buf).values, k, j, b, n, wkj);
+      set_block((*buf).values, k, k, b, n, wkk);
       floyd((*buf).values, wkj, wkk, wkj, b, n);
     }
     for (int i = 0; i < B; i++) {
       if (i == k)
         continue;
-      wik = get_block((*buf).values, i, k, b, n);
-      wkk = get_block((*buf).values, k, k, b, n);
+      set_block((*buf).values, i, k, b, n, wik);
+      set_block((*buf).values, k, k, b, n, wkk);
       floyd((*buf).values, wik, wik, wkk, b, n);
 
       // independant phase
       for (int j = 0; j < B; j++) {
         if (j == k)
           continue;
-        wkj = get_block((*buf).values, k, j, b, n);
-        wij = get_block((*buf).values, i, j, b, n);
+        set_block((*buf).values, k, j, b, n, wkj);
+        set_block((*buf).values, i, j, b, n, wij);
         floyd((*buf).values, wij, wik, wkj, b, n);
       }
     }
