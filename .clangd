@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - -std=c11
+    # Apple Silicon (Homebrew default)
+    - -I/opt/homebrew/include
+    # Intel Macs (if you’re on x86 Homebrew)
+    - -I/usr/local/include

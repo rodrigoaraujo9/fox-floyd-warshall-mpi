@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 typedef struct {
   int **values;
   int n;
@@ -39,6 +41,10 @@ int repeated_squaring_apsp(Matrix w, Matrix *buf);
 int floyd_warshall_apsp(Matrix w, Matrix *buf);
 
 void assert_apsp(Matrix a, Matrix b, char *title);
+
+int **get_block(int **matrix, int block_row, int block_col, int b, int n);
+void floyd(int **matrix, int **C, int **A, int **B, int b, int n);
+int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b);
 
 int main(int argc, char **argv) {
   if (argc != 3) {
@@ -80,17 +86,31 @@ int main(int argc, char **argv) {
   printf("Floyd Warshall APSP: Speed = %f\n",
          (float)(end - start) / CLOCKS_PER_SEC);
 
+  Matrix matrix_fw_b_apsp;
+  start = clock();
+  if (blocked_floyd_warshall_apsp(input_file_matrix, &matrix_fw_b_apsp, 50) !=
+      0) {
+    fprintf(stderr, "Failed to do block fw!\n");
+  }
+  end = clock();
+  // print_matrix(matrix_rs_apsp, "Repeated Squaring APSP");
+  printf("Blocked FW APSP: Speed = %f\n",
+         (float)(end - start) / CLOCKS_PER_SEC);
+
   Matrix output_file_matrix =
       read_output_matrix_from_file(argv[2], input_file_matrix.n);
 
   assert_apsp(matrix_rs_apsp, output_file_matrix, "Repeated Squaring APSP");
   assert_apsp(matrix_fw_apsp, output_file_matrix, "Floyd Warshall APSP");
+  assert_apsp(matrix_fw_b_apsp, output_file_matrix,
+              "Floyd Warshall Blocked APSP");
 
   destroy_matrix(input_file_matrix);
   destroy_matrix(output_file_matrix);
   // destroy_matrix(matrix_slow_apsp);
   destroy_matrix(matrix_rs_apsp);
   destroy_matrix(matrix_fw_apsp);
+  destroy_matrix(matrix_fw_b_apsp);
   return 0;
 }
 
@@ -301,5 +321,103 @@ int floyd_warshall_apsp(Matrix w, Matrix *buf) {
       }
     }
   }
+  return 0;
+}
+
+int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
+  int r0 = b_row * b;
+  int c0 = b_col * b;
+
+  assert(r0 >= 0 && c0 >= 0);
+  assert(r0 + b <= n && c0 + b <= n);
+
+  int **block = (int **)malloc(sizeof(int *) * b);
+  for (int i = 0; i < b; i++) {
+    block[i] = &matrix[r0 + i][c0];
+  }
+  return block;
+}
+
+void floyd(int **matrix, int **C, int **A, int **B, int b, int n) {
+  int a_val, b_val, sum;
+  for (int k = 0; k < b; k++) {
+    for (int i = 0; i < b; i++) {
+      a_val = A[i][k];
+      if (a_val == INT_MAX)
+        continue;
+      for (int j = 0; j < b; j++) {
+        b_val = B[k][j];
+        if (b_val != INT_MAX) {
+          sum = a_val + b_val;
+          if (C[i][j] > sum) {
+            C[i][j] = sum;
+          }
+        }
+      }
+    }
+  }
+}
+
+int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b) {
+  int n = w.n;
+  if (n % b != 0) {
+    fprintf(stderr, "Block size must divide matrix size %d\n", n);
+    return 1;
+  }
+
+  copy_matrix(w, buf);
+  if ((*buf).values == NULL) {
+    fprintf(stderr, "Failed to copy initial matrix\n");
+    return 1;
+  }
+
+  int B = n / b;
+  int **wkk = (int **)malloc(sizeof(int *) * b);
+  int **wkj = (int **)malloc(sizeof(int *) * b);
+  int **wik = (int **)malloc(sizeof(int *) * b);
+  int **wij = (int **)malloc(sizeof(int *) * b);
+
+  if (!wkk || !wkj || !wik || !wij) {
+    free(wkk);
+    free(wkj);
+    free(wik);
+    free(wij);
+    fprintf(stderr, "Could not allocate mem for all\n");
+    return 1;
+  }
+
+  for (int k = 0; k < B; k++) {
+    // dependant phase
+    wkk = get_block((*buf).values, k, k, b, n);
+    floyd((*buf).values, wkk, wkk, wkk, b, n);
+    // partially dependant phase
+    for (int j = 0; j < B; j++) {
+      if (j == k)
+        continue;
+      wkj = get_block((*buf).values, k, j, b, n);
+      wkk = get_block((*buf).values, k, k, b, n);
+      floyd((*buf).values, wkj, wkk, wkj, b, n);
+    }
+    for (int i = 0; i < B; i++) {
+      if (i == k)
+        continue;
+      wik = get_block((*buf).values, i, k, b, n);
+      wkk = get_block((*buf).values, k, k, b, n);
+      floyd((*buf).values, wik, wik, wkk, b, n);
+
+      // independant phase
+      for (int j = 0; j < B; j++) {
+        if (j == k)
+          continue;
+        wkj = get_block((*buf).values, k, j, b, n);
+        wij = get_block((*buf).values, i, j, b, n);
+        floyd((*buf).values, wij, wik, wkj, b, n);
+      }
+    }
+  }
+  free(wkk);
+  free(wkj);
+  free(wik);
+  free(wij);
   return 0;
 }
