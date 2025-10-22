@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - "-I/opt/homebrew/opt/open-mpi/include"
+    - "-L/opt/homebrew/opt/open-mpi/lib"
+    - "-lopen-mpi"

@@ -1,8 +1,10 @@
 #include <assert.h>
+#include <math.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <mpi.h>
 
 typedef struct {
   int **values;
@@ -13,6 +15,19 @@ typedef struct {
   char *i;
   char *o;
 } IO_Files;
+
+typedef struct {
+    int p;              /* Total number of processes */
+    MPI_Comm comm;      /* Communicator for entire grid */
+    MPI_Comm row_comm;  /* Communicator for my row */
+    MPI_Comm col_comm;  /* Communicator for my col */
+    int q;              /* Order of grid */
+    int my_row;         /* My row number */
+    int my_col;         /* My column number */
+    int my_rank;        /* My rank in the grid communicator */
+} GRID_INFO_TYPE;
+
+MPI_Datatype DERIVED_LOCAL_MATRIX;
 
 IO_Files io_files[] = {
     {.i = "matrix_examples/input5", .o = "matrix_examples/output5"},
@@ -25,18 +40,23 @@ IO_Files io_files[] = {
      */
 };
 
+void setup_grid(GRID_INFO_TYPE* grid);
+
 Matrix read_input_matrix_from_file(char *file_path);
 Matrix read_output_matrix_from_file(char *file_path, int n);
 
 void print_matrix(Matrix matrix, char *title);
 void copy_matrix(Matrix matrix_to_copy, Matrix *buf);
 void destroy_matrix(Matrix matrix);
+int allocate_matrix(int size, Matrix *buf);
 
+int set_matrix_to_zeros(Matrix *buf);
 int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
 
 int slow_apsp(Matrix w, Matrix *buf);
 int repeated_squaring_apsp(Matrix w, Matrix *buf);
 int floyd_warshall_apsp(Matrix w, Matrix *buf);
+void fox_apsp(int n, GRID_INFO_TYPE* grid, Matrix a, Matrix b, Matrix* buf);
 
 void assert_apsp(Matrix a, Matrix b, char *title);
 
@@ -201,6 +221,24 @@ void destroy_matrix(Matrix matrix) {
   }
 }
 
+int allocate_matrix(int size, Matrix *buf) {
+  (*buf).values = malloc(size * sizeof(int *));
+  (*buf).n = size;
+  for (int i = 0; i < size; i++) {
+    (*buf).values[i] = malloc(size * sizeof(int));
+  }
+  return 0;
+}
+
+int set_matrix_to_zeros(Matrix *buf) {
+    for (int i = 0; i < (*buf).n; i++) {
+        for (int j = 0; j < (*buf).n; j++) {
+            (*buf).values[i][j] = 0;
+        }
+    }
+    return 0;
+}
+
 // given algorythm for matrix mul using dynamic programming
 int special_matrix_mul(Matrix a, Matrix b, Matrix *buf) {
   if (a.n != b.n) {
@@ -302,4 +340,65 @@ int floyd_warshall_apsp(Matrix w, Matrix *buf) {
     }
   }
   return 0;
+}
+
+void setup_grid(GRID_INFO_TYPE* grid) {
+    int old_rank;
+    int dimensions[2];
+    int periods[2];
+    int coordinates[2];
+    int varying_coords[2];
+
+    /* Set up Global Grid Information */
+    MPI_Comm_size(MPI_COMM_WORLD, &(grid->p));
+    MPI_Comm_rank(MPI_COMM_WORLD, &old_rank);
+    grid->q = (int) sqrt((double) grid->p);
+    dimensions[0] = dimensions[1] = grid->q;
+    periods[0] = periods[1] = 1;
+    MPI_Cart_create(MPI_COMM_WORLD, 2, dimensions, periods, 1, &(grid->comm));
+    MPI_Comm_rank(grid->comm, &(grid->my_rank));
+    MPI_Cart_coords(grid->comm, grid->my_rank, 2, coordinates);
+    grid->my_row = coordinates[0];
+    grid->my_col = coordinates[1];
+
+    /* Set up row and column communicators */
+    varying_coords[0] = 0; varying_coords[1] = 1;
+    MPI_Cart_sub(grid->comm, varying_coords, &(grid->row_comm));
+    varying_coords[0] = 1; varying_coords[1] = 0;
+    MPI_Cart_sub(grid->comm, varying_coords, &(grid->col_comm));
+} /* Setup_grid */
+
+// Implementation of Fox's Algorithm
+void fox_apsp(int n, GRID_INFO_TYPE* grid, Matrix a, Matrix b, Matrix* buf) {
+    Matrix temp_a;
+    int bcast_root;
+    int n_bar;  /* order of block submatrix = n/q */
+    int source;
+    int dest;
+    int tag = 43;
+    MPI_Status status;
+
+    n_bar = n / grid->q;
+    set_matrix_to_zeros(buf);
+
+    /* Calculate addresses for circular shift of B */
+    source = (grid->my_row + 1) % grid->q;
+    dest = (grid->my_row + grid->q - 1) % grid->q;
+
+    /* Set aside storage for the broadcast block of A */
+    allocate_matrix(n_bar, &temp_a);
+
+    for (int step = 0; step < grid->q; step++) {
+        bcast_root = (grid->my_row + step) % grid->q;
+        if (bcast_root == grid->my_col) {
+            MPI_Bcast(&a, 1, DERIVED_LOCAL_MATRIX, bcast_root, grid->row_comm);
+            special_matrix_mul(a, b, buf);
+        } else {
+            MPI_Bcast(&temp_a, 1, DERIVED_LOCAL_MATRIX, bcast_root, grid->row_comm);
+            special_matrix_mul(temp_a, a, buf);
+        }
+        MPI_Send(&b, 1, DERIVED_LOCAL_MATRIX, dest, tag, grid->col_comm);
+        MPI_Recv(&b, 1, DERIVED_LOCAL_MATRIX, source, tag, grid->col_comm, &status);
+    }
+
 }
