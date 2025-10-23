@@ -48,23 +48,19 @@ void print_matrix(Matrix matrix, char *title);
 void copy_matrix(Matrix matrix_to_copy, Matrix *buf);
 void destroy_matrix(Matrix matrix);
 
-int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
-
-int slow_apsp(Matrix w, Matrix *buf);
-int repeated_squaring_apsp(Matrix w, Matrix *buf);
-int floyd_warshall_apsp(Matrix w, Matrix *buf);
-
 void assert_apsp(Matrix a, Matrix b, char *title);
 
 void set_block(int **matrix, int block_row, int block_col, int b, int n,
                int **block);
 
+int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
+void setup_cart(CartInfo *cart, int n);
 void floyd(int **matrix, int **C, int **A, int **B, int b, int n);
 
+int slow_apsp(Matrix w, Matrix *buf);
+int repeated_squaring_apsp(Matrix w, Matrix *buf);
+int floyd_warshall_apsp(Matrix w, Matrix *buf);
 int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b);
-
-void setup_cart(CartInfo *cart, int n);
-
 int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b);
 
 int main(int argc, char **argv) {
@@ -402,6 +398,7 @@ int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
   return block;
 }
 
+// auxilary funct for blocked floyd warshall
 void floyd(int **matrix, int **C, int **A, int **B, int b, int n) {
   int a_val, b_val, sum;
   for (int k = 0; k < b; k++) {
