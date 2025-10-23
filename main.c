@@ -37,10 +37,8 @@ IO_Files io_files[] = {
     {.i = "matrix_examples/input6", .o = "matrix_examples/output6"},
     {.i = "matrix_examples/input300", .o = "matrix_examples/output300"},
     {.i = "matrix_examples/input600", .o = "matrix_examples/output600"},
-    /*
     {.i = "matrix_examples/input900", .o = "matrix_examples/output900"},
     {.i = "matrix_examples/input1200", .o = "matrix_examples/output1200"},
-     */
 };
 
 Matrix read_input_matrix_from_file(char *file_path);
@@ -91,8 +89,8 @@ int main(int argc, char **argv) {
     MPI_Finalize();
     return 1;
   }
-  Matrix expected = read_output_matrix_from_file(argv[2], input.n);
-  if (expected.values == NULL) {
+  Matrix output_file_matrix = read_output_matrix_from_file(argv[2], input.n);
+  if (output_file_matrix.values == NULL) {
     if (world_rank == 0)
       fprintf(stderr, "Failed to read expected matrix: %s\n", argv[2]);
     destroy_matrix(input);
@@ -115,7 +113,7 @@ int main(int argc, char **argv) {
     if (repeated_squaring_apsp(input, &rs_out) != 0) {
       fprintf(stderr, "Repeated Squaring APSP failed\n");
       destroy_matrix(input);
-      destroy_matrix(expected);
+      destroy_matrix(output_file_matrix);
       MPI_Finalize();
       return 1;
     }
@@ -126,7 +124,7 @@ int main(int argc, char **argv) {
     if (floyd_warshall_apsp(input, &fw_out) != 0) {
       fprintf(stderr, "Floyd–Warshall APSP failed\n");
       destroy_matrix(input);
-      destroy_matrix(expected);
+      destroy_matrix(output_file_matrix);
       destroy_matrix(rs_out);
       MPI_Finalize();
       return 1;
@@ -144,7 +142,7 @@ int main(int argc, char **argv) {
     if (world_rank == 0)
       fprintf(stderr, "MPI Blocked FW APSP failed\n");
     destroy_matrix(input);
-    destroy_matrix(expected);
+    destroy_matrix(output_file_matrix);
     if (world_rank == 0) {
       destroy_matrix(rs_out);
       destroy_matrix(fw_out);
@@ -159,14 +157,13 @@ int main(int argc, char **argv) {
   }
 
   if (world_rank == 0) {
-    assert_apsp(mpi_out, expected, "MPI Blocked FW vs Expected");
-    assert_apsp(rs_out, expected, "Repeated Squaring vs Expected");
-    assert_apsp(fw_out, expected, "Floyd–Warshall vs Expected");
-    assert_apsp(mpi_out, fw_out, "MPI Blocked FW vs Floyd–Warshall");
+    assert_apsp(mpi_out, output_file_matrix, "MPI Blocked FW APSP");
+    assert_apsp(rs_out, output_file_matrix, "Repeated Squaring APSP");
+    assert_apsp(fw_out, output_file_matrix, "Floyd–Warshall APSP");
   }
 
   destroy_matrix(input);
-  destroy_matrix(expected);
+  destroy_matrix(output_file_matrix);
   destroy_matrix(mpi_out);
   if (world_rank == 0) {
     destroy_matrix(rs_out);
@@ -567,7 +564,7 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
     wkk = get_block((*buf).values, k, k, b, n);
     floyd((*buf).values, wkk, wkk, wkk, b, n);
     free(wkk);
-    wkk = NULL; // <-- free immediately
+    wkk = NULL;
 
     // partially dependant phase
     for (int j = 0; j < B; j++) {
