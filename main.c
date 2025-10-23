@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <math.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,8 +39,6 @@ IO_Files io_files[] = {
      */
 };
 
-void setup_grid(GRID_INFO_TYPE* grid);
-
 Matrix read_input_matrix_from_file(char *file_path);
 Matrix read_output_matrix_from_file(char *file_path, int n);
 
@@ -56,10 +53,11 @@ int special_matrix_mul(Matrix a, Matrix b, Matrix *buf);
 int slow_apsp(Matrix w, Matrix *buf);
 int repeated_squaring_apsp(Matrix w, Matrix *buf);
 int floyd_warshall_apsp(Matrix w, Matrix *buf);
-void fox_apsp(int n, GRID_INFO_TYPE* grid, Matrix a, Matrix b, Matrix* buf);
+int fox_matrix_mul(int my_rank, int number_of_processes, Matrix a, Matrix b, Matrix *buf);
 
 void assert_apsp(Matrix a, Matrix b, char *title);
 
+/*
 int main(int argc, char **argv) {
   if (argc != 3) {
     fprintf(stderr, "Not enough arguments!\n");
@@ -113,6 +111,7 @@ int main(int argc, char **argv) {
   destroy_matrix(matrix_fw_apsp);
   return 0;
 }
+*/
 
 void assert_apsp(Matrix a, Matrix b, char *title) {
   assert(a.n == b.n);
@@ -342,63 +341,37 @@ int floyd_warshall_apsp(Matrix w, Matrix *buf) {
   return 0;
 }
 
-void setup_grid(GRID_INFO_TYPE* grid) {
-    int old_rank;
-    int dimensions[2];
-    int periods[2];
-    int coordinates[2];
-    int varying_coords[2];
 
-    /* Set up Global Grid Information */
-    MPI_Comm_size(MPI_COMM_WORLD, &(grid->p));
-    MPI_Comm_rank(MPI_COMM_WORLD, &old_rank);
-    grid->q = (int) sqrt((double) grid->p);
-    dimensions[0] = dimensions[1] = grid->q;
-    periods[0] = periods[1] = 1;
-    MPI_Cart_create(MPI_COMM_WORLD, 2, dimensions, periods, 1, &(grid->comm));
-    MPI_Comm_rank(grid->comm, &(grid->my_rank));
-    MPI_Cart_coords(grid->comm, grid->my_rank, 2, coordinates);
-    grid->my_row = coordinates[0];
-    grid->my_col = coordinates[1];
+int fox_matrix_mul(int my_rank, int number_of_processes, Matrix a, Matrix b, Matrix *buf) {
+    // Init variables
+    int matrix_size = a.n;
 
-    /* Set up row and column communicators */
-    varying_coords[0] = 0; varying_coords[1] = 1;
-    MPI_Cart_sub(grid->comm, varying_coords, &(grid->row_comm));
-    varying_coords[0] = 1; varying_coords[1] = 0;
-    MPI_Cart_sub(grid->comm, varying_coords, &(grid->col_comm));
-} /* Setup_grid */
-
-// Implementation of Fox's Algorithm
-void fox_apsp(int n, GRID_INFO_TYPE* grid, Matrix a, Matrix b, Matrix* buf) {
-    Matrix temp_a;
-    int bcast_root;
-    int n_bar;  /* order of block submatrix = n/q */
-    int source;
-    int dest;
-    int tag = 43;
-    MPI_Status status;
-
-    n_bar = n / grid->q;
-    set_matrix_to_zeros(buf);
-
-    /* Calculate addresses for circular shift of B */
-    source = (grid->my_row + 1) % grid->q;
-    dest = (grid->my_row + grid->q - 1) % grid->q;
-
-    /* Set aside storage for the broadcast block of A */
-    allocate_matrix(n_bar, &temp_a);
-
-    for (int step = 0; step < grid->q; step++) {
-        bcast_root = (grid->my_row + step) % grid->q;
-        if (bcast_root == grid->my_col) {
-            MPI_Bcast(&a, 1, DERIVED_LOCAL_MATRIX, bcast_root, grid->row_comm);
-            special_matrix_mul(a, b, buf);
-        } else {
-            MPI_Bcast(&temp_a, 1, DERIVED_LOCAL_MATRIX, bcast_root, grid->row_comm);
-            special_matrix_mul(temp_a, a, buf);
-        }
-        MPI_Send(&b, 1, DERIVED_LOCAL_MATRIX, dest, tag, grid->col_comm);
-        MPI_Recv(&b, 1, DERIVED_LOCAL_MATRIX, source, tag, grid->col_comm, &status);
+    if (matrix_size % number_of_processes != 0) {
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
+    // Divide the matrix and send to other processes
+
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    // Init variables
+    int number_of_processes, my_rank;
+
+    // Init MPI
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &number_of_processes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    if (my_rank == 0) {
+        Matrix input_file_matrix = read_input_matrix_from_file(io_files[0].i);
+        print_matrix(input_file_matrix, "Input Matrix");
+
+        Matrix result;
+        fox_matrix_mul(my_rank, number_of_processes, input_file_matrix, input_file_matrix, &result);
+    }
+
+    MPI_Finalize();
+    return 0;
 }
