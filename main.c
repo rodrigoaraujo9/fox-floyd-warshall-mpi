@@ -1,5 +1,7 @@
 #include <assert.h>
 #include <limits.h>
+#include <math.h>
+#include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -15,6 +17,20 @@ typedef struct {
   char *i;
   char *o;
 } IO_Files;
+
+typedef struct {
+  MPI_Comm cart_comm;
+  MPI_Comm row_comm;
+  MPI_Comm col_comm;
+  int p_row;
+  int p_col;
+  int g_rows;
+  int g_cols;
+  int my_rank;
+  int cart_rank;
+  int row_rank;
+  int size;
+} CartInfo;
 
 IO_Files io_files[] = {
     {.i = "matrix_examples/input5", .o = "matrix_examples/output5"},
@@ -44,74 +60,124 @@ void assert_apsp(Matrix a, Matrix b, char *title);
 
 void set_block(int **matrix, int block_row, int block_col, int b, int n,
                int **block);
+
 void floyd(int **matrix, int **C, int **A, int **B, int b, int n);
+
 int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b);
 
+void setup_cart(CartInfo *cart, int n);
+
+int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b);
+
 int main(int argc, char **argv) {
+  MPI_Init(&argc, &argv);
+
+  int world_size = 0, world_rank = 0;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
   if (argc != 3) {
-    fprintf(stderr, "Not enough arguments!\n");
+    if (world_rank == 0) {
+      fprintf(stderr, "Usage: %s <input_matrix> <expected_output>\n", argv[0]);
+    }
+    MPI_Finalize();
     return 1;
   }
 
-  clock_t start, end;
-
-  Matrix input_file_matrix = read_input_matrix_from_file(argv[1]);
-  // print_matrix(matrix, "Input Matrix");
-
-  // Matrix matrix_slow_apsp;
-  // start = clock();
-  // if (slow_apsp(matrix, &matrix_slow_apsp) != 0) {
-  //     fprintf(stderr, "Failed to apsp!\n");
-  // }
-  // end = clock();
-  // print_matrix(matrix_slow_apsp, "Slow APSP");
-  // printf("Slow APSP: Speed = %f\n", (float)(end - start) / CLOCKS_PER_SEC);
-
-  Matrix matrix_rs_apsp;
-  start = clock();
-  if (repeated_squaring_apsp(input_file_matrix, &matrix_rs_apsp) != 0) {
-    fprintf(stderr, "Failed to apsp!\n");
+  Matrix input = read_input_matrix_from_file(argv[1]);
+  if (input.values == NULL) {
+    if (world_rank == 0)
+      fprintf(stderr, "Failed to read input matrix: %s\n", argv[1]);
+    MPI_Finalize();
+    return 1;
   }
-  end = clock();
-  // print_matrix(matrix_rs_apsp, "Repeated Squaring APSP");
-  printf("Repeated Squaring APSP: Speed = %f\n",
-         (float)(end - start) / CLOCKS_PER_SEC);
-
-  Matrix matrix_fw_apsp;
-  start = clock();
-  if (floyd_warshall_apsp(input_file_matrix, &matrix_fw_apsp) != 0) {
-    fprintf(stderr, "Failed to apsp!\n");
+  Matrix expected = read_output_matrix_from_file(argv[2], input.n);
+  if (expected.values == NULL) {
+    if (world_rank == 0)
+      fprintf(stderr, "Failed to read expected matrix: %s\n", argv[2]);
+    destroy_matrix(input);
+    MPI_Finalize();
+    return 1;
   }
-  end = clock();
-  // print_matrix(matrix_fw_apsp, "Floyd Warshall APSP");
-  printf("Floyd Warshall APSP: Speed = %f\n",
-         (float)(end - start) / CLOCKS_PER_SEC);
 
-  Matrix matrix_fw_b_apsp;
-  start = clock();
-  if (blocked_floyd_warshall_apsp(input_file_matrix, &matrix_fw_b_apsp, 50) !=
-      0) {
-    fprintf(stderr, "Failed to do block fw!\n");
+  CartInfo cart;
+  setup_cart(&cart, input.n);
+  int p = cart.g_rows;
+  int b = input.n / p;
+
+  Matrix rs_out = (Matrix){0};
+  Matrix fw_out = (Matrix){0};
+
+  double t0, t1;
+
+  if (world_rank == 0) {
+    t0 = MPI_Wtime();
+    if (repeated_squaring_apsp(input, &rs_out) != 0) {
+      fprintf(stderr, "Repeated Squaring APSP failed\n");
+      destroy_matrix(input);
+      destroy_matrix(expected);
+      MPI_Finalize();
+      return 1;
+    }
+    t1 = MPI_Wtime();
+    printf("Repeated Squaring APSP: Time = %.6f s\n", t1 - t0);
+
+    t0 = MPI_Wtime();
+    if (floyd_warshall_apsp(input, &fw_out) != 0) {
+      fprintf(stderr, "Floyd–Warshall APSP failed\n");
+      destroy_matrix(input);
+      destroy_matrix(expected);
+      destroy_matrix(rs_out);
+      MPI_Finalize();
+      return 1;
+    }
+    t1 = MPI_Wtime();
+    printf("Floyd–Warshall APSP:   Time = %.6f s\n", t1 - t0);
   }
-  end = clock();
-  // print_matrix(matrix_rs_apsp, "Repeated Squaring APSP");
-  printf("Blocked FW APSP: Speed = %f\n",
-         (float)(end - start) / CLOCKS_PER_SEC);
 
-  Matrix output_file_matrix =
-      read_output_matrix_from_file(argv[2], input_file_matrix.n);
+  MPI_Barrier(MPI_COMM_WORLD);
+  Matrix mpi_out = (Matrix){0};
+  t0 = MPI_Wtime();
+  int rc = blocked_floyd_warshall_p_apsp(input, &mpi_out, b);
+  t1 = MPI_Wtime();
+  if (rc != 0) {
+    if (world_rank == 0)
+      fprintf(stderr, "MPI Blocked FW APSP failed\n");
+    destroy_matrix(input);
+    destroy_matrix(expected);
+    if (world_rank == 0) {
+      destroy_matrix(rs_out);
+      destroy_matrix(fw_out);
+    }
+    MPI_Finalize();
+    return 1;
+  }
 
-  assert_apsp(matrix_rs_apsp, output_file_matrix, "Repeated Squaring APSP");
-  assert_apsp(matrix_fw_apsp, output_file_matrix, "Floyd Warshall APSP");
-  assert_apsp(matrix_fw_b_apsp, output_file_matrix,
-              "Floyd Warshall Blocked APSP");
+  if (world_rank == 0) {
+    printf("MPI Blocked FW APSP:   Time = %.6f s (P=%d, p=%d, b=%d)\n", t1 - t0,
+           world_size, p, b);
+  }
 
-  destroy_matrix(input_file_matrix);
-  destroy_matrix(output_file_matrix);
-  // destroy_matrix(matrix_slow_apsp);
-  destroy_matrix(matrix_rs_apsp);
-  destroy_matrix(matrix_fw_apsp);
-  destroy_matrix(matrix_fw_b_apsp);
+  if (world_rank == 0) {
+    assert_apsp(mpi_out, expected, "MPI Blocked FW vs Expected");
+    assert_apsp(rs_out, expected, "Repeated Squaring vs Expected");
+    assert_apsp(fw_out, expected, "Floyd–Warshall vs Expected");
+    assert_apsp(mpi_out, fw_out, "MPI Blocked FW vs Floyd–Warshall");
+  }
+
+  destroy_matrix(input);
+  destroy_matrix(expected);
+  destroy_matrix(mpi_out);
+  if (world_rank == 0) {
+    destroy_matrix(rs_out);
+    destroy_matrix(fw_out);
+  }
+
+  MPI_Comm_free(&cart.row_comm);
+  MPI_Comm_free(&cart.col_comm);
+  MPI_Comm_free(&cart.cart_comm);
+
+  MPI_Finalize();
   return 0;
 }
 
@@ -325,16 +391,18 @@ int floyd_warshall_apsp(Matrix w, Matrix *buf) {
   return 0;
 }
 
-void set_block(int **matrix, int b_row, int b_col, int b, int n, int **block) {
+int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
   int r0 = b_row * b;
   int c0 = b_col * b;
 
   assert(r0 >= 0 && c0 >= 0);
   assert(r0 + b <= n && c0 + b <= n);
 
+  int **block = (int **)malloc(sizeof(int *) * b);
   for (int i = 0; i < b; i++) {
     block[i] = &matrix[r0 + i][c0];
   }
+  return block;
 }
 
 void floyd(int **matrix, int **C, int **A, int **B, int b, int n) {
@@ -357,6 +425,7 @@ void floyd(int **matrix, int **C, int **A, int **B, int b, int n) {
   }
 }
 
+// for perfect squares only for now
 int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b) {
   int n = w.n;
   if (n % b != 0) {
@@ -371,52 +440,176 @@ int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b) {
   }
 
   int B = n / b;
-  int **wkk = (int **)malloc(sizeof(int *) * b);
-  int **wkj = (int **)malloc(sizeof(int *) * b);
-  int **wik = (int **)malloc(sizeof(int *) * b);
-  int **wij = (int **)malloc(sizeof(int *) * b);
-
-  if (!wkk || !wkj || !wik || !wij) {
-    free(wkk);
-    free(wkj);
-    free(wik);
-    free(wij);
-    fprintf(stderr, "Could not allocate mem for all\n");
-    return 1;
-  }
+  int **wkk, **wkj, **wik, **wij;
 
   for (int k = 0; k < B; k++) {
     // dependant phase
-    set_block((*buf).values, k, k, b, n, wkk);
+    wkk = get_block((*buf).values, k, k, b, n);
     floyd((*buf).values, wkk, wkk, wkk, b, n);
     // partially dependant phase
     for (int j = 0; j < B; j++) {
       if (j == k)
         continue;
-      set_block((*buf).values, k, j, b, n, wkj);
-      set_block((*buf).values, k, k, b, n, wkk);
+      wkj = get_block((*buf).values, k, j, b, n);
+      wkk = get_block((*buf).values, k, k, b, n);
       floyd((*buf).values, wkj, wkk, wkj, b, n);
+      free(wkj);
+      free(wkk);
     }
     for (int i = 0; i < B; i++) {
       if (i == k)
         continue;
-      set_block((*buf).values, i, k, b, n, wik);
-      set_block((*buf).values, k, k, b, n, wkk);
+      wik = get_block((*buf).values, i, k, b, n);
+      wkk = get_block((*buf).values, k, k, b, n);
       floyd((*buf).values, wik, wik, wkk, b, n);
+      free(wkk);
 
       // independant phase
       for (int j = 0; j < B; j++) {
         if (j == k)
           continue;
-        set_block((*buf).values, k, j, b, n, wkj);
-        set_block((*buf).values, i, j, b, n, wij);
+        wkj = get_block((*buf).values, k, j, b, n);
+        wij = get_block((*buf).values, i, j, b, n);
         floyd((*buf).values, wij, wik, wkj, b, n);
+        free(wkj);
+        free(wij);
       }
+      free(wik);
     }
   }
-  free(wkk);
-  free(wkj);
-  free(wik);
-  free(wij);
+
+  return 0;
+}
+
+void setup_cart(CartInfo *cart, int n) {
+  MPI_Comm_size(MPI_COMM_WORLD, &cart->size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &cart->my_rank);
+
+  cart->g_rows = (int)sqrt((double)cart->size);
+  cart->g_cols = cart->g_rows;
+
+  if (cart->g_rows * cart->g_cols != cart->size) {
+    if (cart->my_rank == 0) {
+      fprintf(stderr, "Number of processes must be a perfect square (got %d)\n",
+              cart->size);
+    }
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  if (n % cart->g_rows != 0) {
+    if (cart->my_rank == 0) {
+      fprintf(stderr, "Matrix size n=%d must be divisible by sqrt(P)=%d\n", n,
+              cart->g_rows);
+    }
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  int dims[2] = {cart->g_rows, cart->g_cols};
+  int periods[2] = {0, 0};
+  int reorder = 0;
+
+  MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cart->cart_comm);
+  if (cart->cart_comm == MPI_COMM_NULL) {
+    if (cart->my_rank == 0)
+      fprintf(stderr, "MPI_Cart_create failed\n");
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  MPI_Comm_rank(cart->cart_comm, &cart->cart_rank);
+
+  int coords[2];
+  MPI_Cart_coords(cart->cart_comm, cart->cart_rank, 2, coords);
+  cart->p_row = coords[0];
+  cart->p_col = coords[1];
+
+  int keep[2] = {0, 1};
+  MPI_Cart_sub(cart->cart_comm, keep, &cart->row_comm);
+
+  keep[0] = 1;
+  keep[1] = 0;
+  MPI_Cart_sub(cart->cart_comm, keep, &cart->col_comm);
+
+  MPI_Comm_rank(cart->row_comm, &cart->row_rank);
+}
+
+int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
+  CartInfo cart;
+  setup_cart(&cart, w.n);
+
+  int n = w.n;
+  int p = cart.g_rows;
+  int localN = n / p;
+
+  if (b != localN) {
+    if (cart.my_rank == 0) {
+      fprintf(stderr,
+              "For this parallel version set b == n/sqrt(P) (got b=%d, need "
+              "%d)\n",
+              b, localN);
+    }
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  copy_matrix(w, buf);
+  if ((*buf).values == NULL) {
+    fprintf(stderr, "Failed to copy initial matrix\n");
+    MPI_Comm_free(&cart.row_comm);
+    MPI_Comm_free(&cart.col_comm);
+    MPI_Comm_free(&cart.cart_comm);
+    return 1;
+  }
+
+  int B = n / b;
+  int **wkk = NULL, **wkj = NULL, **wik = NULL, **wij = NULL;
+
+  for (int k = 0; k < B; k++) {
+    // dependant phase
+    wkk = get_block((*buf).values, k, k, b, n);
+    floyd((*buf).values, wkk, wkk, wkk, b, n);
+    free(wkk);
+    wkk = NULL; // <-- free immediately
+
+    // partially dependant phase
+    for (int j = 0; j < B; j++) {
+      if (j == k)
+        continue;
+      wkj = get_block((*buf).values, k, j, b, n);
+      wkk = get_block((*buf).values, k, k, b, n);
+      floyd((*buf).values, wkj, wkk, wkj, b, n);
+      free(wkj);
+      wkj = NULL;
+      free(wkk);
+      wkk = NULL;
+    }
+
+    for (int i = 0; i < B; i++) {
+      if (i == k)
+        continue;
+      wik = get_block((*buf).values, i, k, b, n);
+      wkk = get_block((*buf).values, k, k, b, n);
+      floyd((*buf).values, wik, wik, wkk, b, n);
+      free(wkk);
+      wkk = NULL;
+
+      // independant phase
+      for (int j = 0; j < B; j++) {
+        if (j == k)
+          continue;
+        wkj = get_block((*buf).values, k, j, b, n);
+        wij = get_block((*buf).values, i, j, b, n);
+        floyd((*buf).values, wij, wik, wkj, b, n);
+        free(wkj);
+        wkj = NULL;
+        free(wij);
+        wij = NULL;
+      }
+      free(wik);
+      wik = NULL;
+    }
+  }
+
+  MPI_Comm_free(&cart.row_comm);
+  MPI_Comm_free(&cart.col_comm);
+  MPI_Comm_free(&cart.cart_comm);
   return 0;
 }
