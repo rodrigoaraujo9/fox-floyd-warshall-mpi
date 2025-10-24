@@ -1,5 +1,6 @@
 #include "../includes/algorithms.h"
-#include "../includes/blocked_fw.h"
+//#include "../includes/blocked_fw.h"
+#include "../includes/parallel_fw.h"
 #include "../includes/io.h"
 #include "../includes/matrix.h"
 #include "../includes/types.h"
@@ -84,36 +85,14 @@ int main(int argc, char **argv) {
     printf("Floyd–Warshall APSP:   Time = %.6f s\n", t1 - t0);
   }
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  Matrix mpi_out = (Matrix){0};
-  t0 = MPI_Wtime();
-  int rc = blocked_floyd_warshall_p_apsp(input, &mpi_out, b);
-  t1 = MPI_Wtime();
-  if (rc != 0) {
-    if (world_rank == 0)
-      fprintf(stderr, "MPI Blocked FW APSP failed\n");
-    destroy_matrix(input);
-    destroy_matrix(output_file_matrix);
-    if (world_rank == 0) {
-      destroy_matrix(rs_out);
-      destroy_matrix(fw_out);
-    }
-    MPI_Finalize();
-    return 1;
-  }
-
   if (world_rank == 0) {
-    printf("MPI Blocked FW APSP:   Time = %.6f s (P=%d, p=%d, b=%d)\n", t1 - t0,
-           world_size, p, b);
-
-    assert_apsp(mpi_out, output_file_matrix, "MPI Blocked FW APSP");
+    //assert_apsp(mpi_out, output_file_matrix, "MPI Blocked FW APSP");
     assert_apsp(rs_out, output_file_matrix, "Repeated Squaring APSP");
     assert_apsp(fw_out, output_file_matrix, "Floyd–Warshall APSP");
   }
 
   destroy_matrix(input);
   destroy_matrix(output_file_matrix);
-  destroy_matrix(mpi_out);
   if (world_rank == 0) {
     destroy_matrix(rs_out);
     destroy_matrix(fw_out);

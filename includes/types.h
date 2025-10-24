@@ -17,6 +17,7 @@ typedef struct {
 
 typedef struct {
   int p;             // total number of processes
+  int tag;
   MPI_Comm comm;     // 2D Cartesian communicator
   MPI_Comm row_comm; // subcomm for my row (broadcast A in Fox)
   MPI_Comm col_comm; // subcomm for my column (optional sync/shift of B)
