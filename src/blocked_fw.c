@@ -68,7 +68,7 @@ int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
   return block;
 }
 
-int broadcast_block_to_row(int **block_A, int **new_block, int na, int ma, int step, CartInfo* cart) {
+int broadcast_block_to_row(int **block_A, int **buf, int na, int ma, int step, CartInfo* cart) {
   int root;
   int  count;
 
@@ -76,11 +76,11 @@ int broadcast_block_to_row(int **block_A, int **new_block, int na, int ma, int s
 
   if (cart->my_rank == cart->row_rank * cart->size + (cart->row_rank + step) % cart->size)
   {
-    memcpy(new_block, block_A, count * sizeof(float));
+    memcpy(buf, block_A, count * sizeof(float));
   }
 
   root = (cart->row_rank + step % cart->size) % cart->size;
-  MPI_Bcast(new_block, count, MPI_INT, root, cart->row_comm);
+  MPI_Bcast(buf, count, MPI_INT, root, cart->row_comm);
 
   return 0;
 }
