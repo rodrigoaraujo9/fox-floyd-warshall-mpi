@@ -1,16 +1,12 @@
 CC      := mpicc
 CFLAGS  := -O3 -std=c11 -Wall -Wextra -Wno-unused-parameter
 INCLUDE := -Iinclude
-SRC_COMMON := src/io.c src/matrix.c src/algorithms.c src/blocked_fw.c src/blocked_rs.c
+SRC_COMMON := src/io.c src/matrix.c src/algorithms.c src/blocked_fw.c
 BIN     := apsp
-BIN_RS  := apsp_rs
 
 all: $(BIN)
 
 $(BIN): src/main.c $(SRC_COMMON)
-	$(CC) $(CFLAGS) $(INCLUDE) -o $@ $^ -lm
-
-$(BIN_RS): src/main_rs.c $(SRC_COMMON)
 	$(CC) $(CFLAGS) $(INCLUDE) -o $@ $^ -lm
 
 clean:
