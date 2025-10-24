@@ -10,46 +10,46 @@
 #include <string.h>
 
 void setup_cart(CartInfo *cart, int n) {
-  MPI_Comm_size(MPI_COMM_WORLD, &cart->grid_dim);
+  MPI_Comm_size(MPI_COMM_WORLD, &cart->p);
   MPI_Comm_rank(MPI_COMM_WORLD, &cart->my_rank);
-  cart->grid_dim = (int)sqrt((double)cart->grid_dim);
 
-  if (cart->grid_dim * cart->grid_dim != cart->grid_dim) {
+  cart->q = (int)(sqrt((double)cart->p));
+  if (cart->q * cart->q != cart->p) {
     if (cart->my_rank == 0)
-      fprintf(stderr, "Number of processes must be a perfect square (got %d)\n",
-              cart->grid_dim);
-    MPI_Abort(MPI_COMM_WORLD, 1);
-  }
-  if (n % cart->grid_dim != 0) {
-    if (cart->my_rank == 0)
-      fprintf(stderr, "Matrix size n=%d must be divisible by sqrt(P)=%d\n", n,
-              cart->grid_dim);
+      fprintf(stderr, "P must be a perfect square (got %d).\n", cart->p);
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
-  int dims[2] = {cart->grid_dim, cart->grid_dim};
+  if (n % cart->q != 0) {
+    if (cart->my_rank == 0)
+      fprintf(stderr, "Matrix size n=%d must be divisible by sqrt(P)=%d.\n", n,
+              cart->q);
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  int dims[2] = {cart->q, cart->q};
   int periods[2] = {0, 0};
   int reorder = 0;
-  MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cart->cart_comm);
-
-  if (cart->cart_comm == MPI_COMM_NULL) {
+  MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cart->comm);
+  if (cart->comm == MPI_COMM_NULL) {
     if (cart->my_rank == 0)
-      fprintf(stderr, "MPI_Cart_create failed\n");
+      fprintf(stderr, "MPI_Cart_create failed.\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
-  MPI_Comm_rank(cart->cart_comm, &cart->cart_rank);
+  int comm_rank;
+  MPI_Comm_rank(cart->comm, &comm_rank);
   int coords[2];
-  MPI_Cart_coords(cart->cart_comm, cart->cart_rank, 2, coords);
-  cart->p_row = coords[0];
-  cart->p_col = coords[1];
+  MPI_Cart_coords(cart->comm, comm_rank, 2, coords);
+  cart->my_row = coords[0];
+  cart->my_col = coords[1];
 
-  int keep[2] = {0, 1};
-  MPI_Cart_sub(cart->cart_comm, keep, &cart->row_comm);
-  keep[0] = 1;
-  keep[1] = 0;
-  MPI_Cart_sub(cart->cart_comm, keep, &cart->col_comm);
-  MPI_Comm_rank(cart->row_comm, &cart->row_rank);
+  int remain[2] = {0, 1};
+  MPI_Cart_sub(cart->comm, remain, &cart->row_comm);
+
+  remain[0] = 1;
+  remain[1] = 0;
+  MPI_Cart_sub(cart->comm, remain, &cart->col_comm);
 }
 
 int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
@@ -63,33 +63,35 @@ int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
   return block;
 }
 
-int broadcast_block_to_row(int **a, int **buf, int na, int ma, int step, CartInfo* cart) {
+int broadcast_block_to_row(int **a, int **buf, int na, int ma, int step,
+                           CartInfo *cart) {
   int root;
-  int  count;
+  int count;
 
-  count = ma * na / cart->p_row;
+  count = ma * na / cart->p;
 
-  if (cart->my_rank == cart->row_rank * cart->grid_dim + (cart->row_rank + step) % cart->grid_dim)
-  {
+  if (cart->my_rank ==
+      cart->my_row * cart->q + (cart->my_row + step) % cart->q) {
     memcpy(buf, a, count * sizeof(float));
   }
 
-  root = (cart->row_rank + step % cart->grid_dim) % cart->grid_dim;
+  root = (cart->my_row + step % cart->q) % cart->q;
   MPI_Bcast(buf, count, MPI_INT, root, cart->row_comm);
 
   return 0;
 }
 
-int circular_shift(int **b, int mb, int nb, CartInfo* cart) {
+int circular_shift(int **b, int mb, int nb, CartInfo *cart) {
   int dest;
   int source;
   int tag = 0;
   MPI_Status status;
 
-  source = (cart->grid_dim + cart->row_rank + 1) % cart->grid_dim;
-  dest = (cart->grid_dim + cart->row_rank - 1) % cart->grid_dim;
+  source = (cart->q + cart->my_row + 1) % cart->q;
+  dest = (cart->q + cart->my_row - 1) % cart->q;
 
-  MPI_Sendrecv_replace(b, mb * nb / cart->p_row, MPI_FLOAT, dest, tag, source, tag, cart->col_comm, &status);
+  MPI_Sendrecv_replace(b, mb * nb / cart->p, MPI_FLOAT, dest, tag, source, tag,
+                       cart->col_comm, &status);
 
   return 0;
 }
@@ -168,8 +170,7 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
   setup_cart(&cart, w.n);
 
   int n = w.n;
-  int p = cart.grid_dim;
-  int localN = n / p;
+  int localN = n / cart.p;
 
   if (b != localN) {
     if (cart.my_rank == 0) {
@@ -182,7 +183,7 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
   if (!buf->values) {
     MPI_Comm_free(&cart.row_comm);
     MPI_Comm_free(&cart.col_comm);
-    MPI_Comm_free(&cart.cart_comm);
+    MPI_Comm_free(&cart.comm);
     return 1;
   }
 
@@ -246,6 +247,6 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
 
   MPI_Comm_free(&cart.row_comm);
   MPI_Comm_free(&cart.col_comm);
-  MPI_Comm_free(&cart.cart_comm);
+  MPI_Comm_free(&cart.comm);
   return 0;
 }

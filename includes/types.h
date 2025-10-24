@@ -16,15 +16,14 @@ typedef struct {
 } IO_Files;
 
 typedef struct {
-  MPI_Comm cart_comm;
-  MPI_Comm row_comm;
-  MPI_Comm col_comm;
-  int p_row;
-  int p_col;
-  int grid_dim;
-  int my_rank;
-  int cart_rank;
-  int row_rank;
+  int p;             // total number of processes
+  MPI_Comm comm;     // 2D Cartesian communicator
+  MPI_Comm row_comm; // subcomm for my row (broadcast A in Fox)
+  MPI_Comm col_comm; // subcomm for my column (optional sync/shift of B)
+  int q;             // sqrt(p)
+  int my_row;        // row coordinate in the grid
+  int my_col;        // col coordinate in the grid
+  int my_rank;       // rank in MPI_COMM_WORLD
 } CartInfo;
 
 #endif // TYPES_H

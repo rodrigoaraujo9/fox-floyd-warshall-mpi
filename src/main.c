@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 
   CartInfo cart;
   setup_cart(&cart, input.n);
-  int p = cart.grid_dim;
+  int p = cart.p;
   int b = input.n / p;
 
   Matrix rs_out = (Matrix){0};
