@@ -10,14 +10,14 @@
 #include <string.h>
 
 void setup_cart(CartInfo *cart, int n) {
-  MPI_Comm_size(MPI_COMM_WORLD, &cart->grid_dim);
+  MPI_Comm_size(MPI_COMM_WORLD, &cart->size);
   MPI_Comm_rank(MPI_COMM_WORLD, &cart->my_rank);
-  cart->grid_dim = (int)sqrt((double)cart->grid_dim);
+  cart->grid_dim = (int)sqrt((double)cart->size);
 
-  if (cart->grid_dim * cart->grid_dim != cart->grid_dim) {
+  if (cart->grid_dim * cart->grid_dim != cart->size) {
     if (cart->my_rank == 0)
       fprintf(stderr, "Number of processes must be a perfect square (got %d)\n",
-              cart->grid_dim);
+              cart->size);
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
   if (n % cart->grid_dim != 0) {
@@ -63,33 +63,19 @@ int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
   return block;
 }
 
-int broadcast_block_to_row(int **a, int **buf, int na, int ma, int step, CartInfo* cart) {
+int broadcast_block_to_row(int **block_A, int **buf, int na, int ma, int step, CartInfo* cart) {
   int root;
   int  count;
 
   count = ma * na / cart->p_row;
 
-  if (cart->my_rank == cart->row_rank * cart->grid_dim + (cart->row_rank + step) % cart->grid_dim)
+  if (cart->my_rank == cart->row_rank * cart->size + (cart->row_rank + step) % cart->size)
   {
-    memcpy(buf, a, count * sizeof(float));
+    memcpy(buf, block_A, count * sizeof(float));
   }
 
-  root = (cart->row_rank + step % cart->grid_dim) % cart->grid_dim;
+  root = (cart->row_rank + step % cart->size) % cart->size;
   MPI_Bcast(buf, count, MPI_INT, root, cart->row_comm);
-
-  return 0;
-}
-
-int circular_shift(int **b, int mb, int nb, CartInfo* cart) {
-  int dest;
-  int source;
-  int tag = 0;
-  MPI_Status status;
-
-  source = (cart->grid_dim + cart->row_rank + 1) % cart->grid_dim;
-  dest = (cart->grid_dim + cart->row_rank - 1) % cart->grid_dim;
-
-  MPI_Sendrecv_replace(b, mb * nb / cart->p_row, MPI_FLOAT, dest, tag, source, tag, cart->col_comm, &status);
 
   return 0;
 }
