@@ -7,6 +7,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void setup_cart(CartInfo *cart, int n) {
   MPI_Comm_size(MPI_COMM_WORLD, &cart->size);
@@ -60,6 +61,23 @@ int **get_block(int **matrix, int b_row, int b_col, int b, int n) {
   for (int i = 0; i < b; i++)
     block[i] = &matrix[r0 + i][c0];
   return block;
+}
+
+int broadcast_block_to_row(int **block_A, int **buf, int na, int ma, int step, CartInfo* cart) {
+  int root;
+  int  count;
+
+  count = ma * na / cart->p_row;
+
+  if (cart->my_rank == cart->row_rank * cart->size + (cart->row_rank + step) % cart->size)
+  {
+    memcpy(buf, block_A, count * sizeof(float));
+  }
+
+  root = (cart->row_rank + step % cart->size) % cart->size;
+  MPI_Bcast(buf, count, MPI_INT, root, cart->row_comm);
+
+  return 0;
 }
 
 void floyd_kernel(int **C, int **A, int **B, int b) {
