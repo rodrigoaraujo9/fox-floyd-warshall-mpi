@@ -25,7 +25,6 @@ typedef struct {
   int my_rank;
   int cart_rank;
   int row_rank;
-  int size;
 } CartInfo;
 
 #endif // TYPES_H
