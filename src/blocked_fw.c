@@ -151,7 +151,6 @@ int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b) {
   }
   return 0;
 }
-
 int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
   CartInfo cart;
   setup_cart(&cart, w.n);
@@ -175,6 +174,19 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
     return 1;
   }
 
+  int *wkk_buf = (int *)malloc(b * b * sizeof(int));
+  int *wkj_buf = (int *)malloc(b * b * sizeof(int));
+  int *wik_buf = (int *)malloc(b * b * sizeof(int));
+
+  int **wkk_ptr = (int **)malloc(b * sizeof(int *));
+  int **wkj_ptr = (int **)malloc(b * sizeof(int *));
+  int **wik_ptr = (int **)malloc(b * sizeof(int *));
+  for (int i = 0; i < b; i++) {
+    wkk_ptr[i] = &wkk_buf[i * b];
+    wkj_ptr[i] = &wkj_buf[i * b];
+    wik_ptr[i] = &wik_buf[i * b];
+  }
+
   int B = n / b;
   for (int k = 0; k < B; k++) {
     int **wkk = get_block(buf->values, k, k, b, n);
@@ -190,7 +202,6 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
       free(wkj);
       free(wkk2);
     }
-
     for (int i = 0; i < B; i++) {
       if (i == k)
         continue;
@@ -211,6 +222,13 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
       free(wik);
     }
   }
+
+  free(wkk_buf);
+  free(wkj_buf);
+  free(wik_buf);
+  free(wkk_ptr);
+  free(wkj_ptr);
+  free(wik_ptr);
 
   MPI_Comm_free(&cart.row_comm);
   MPI_Comm_free(&cart.col_comm);

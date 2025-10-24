@@ -16,8 +16,8 @@ $(BIN_RS): src/main_rs.c $(SRC_COMMON)
 clean:
 	rm -f $(BIN) $(BIN_RS)
 
-run600-9: $(BIN)
-	mpirun -np 9 ./$(BIN) matrix_examples/input600 matrix_examples/output600
+run600-4:
+	mpirun -np 4 ./apsp matrix_examples/input600 matrix_examples/output600
 
-run600-9-rs: $(BIN_RS)
-	mpirun -np 4 ./$(BIN_RS) matrix_examples/input600 matrix_examples/output600
+run1200-9:
+	mpirun -np 9 --oversubscribe ./apsp matrix_examples/input1200 matrix_examples/output1200
