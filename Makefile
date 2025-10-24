@@ -14,3 +14,6 @@ clean:
 
 run600-4:
 	mpirun -np 4 ./apsp matrix_examples/input600 matrix_examples/output600
+
+run1200-9:
+	mpirun -np 9 --oversubscribe ./apsp matrix_examples/input1200 matrix_examples/output1200
