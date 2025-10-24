@@ -11,29 +11,26 @@
 void setup_cart(CartInfo *cart, int n) {
   MPI_Comm_size(MPI_COMM_WORLD, &cart->size);
   MPI_Comm_rank(MPI_COMM_WORLD, &cart->my_rank);
+  cart->grid_dim = (int)sqrt((double)cart->size);
 
-  cart->g_rows = (int)sqrt((double)cart->size);
-  cart->g_cols = cart->g_rows;
-
-  if (cart->g_rows * cart->g_cols != cart->size) {
+  if (cart->grid_dim * cart->grid_dim != cart->size) {
     if (cart->my_rank == 0)
       fprintf(stderr, "Number of processes must be a perfect square (got %d)\n",
               cart->size);
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
-
-  if (n % cart->g_rows != 0) {
+  if (n % cart->grid_dim != 0) {
     if (cart->my_rank == 0)
       fprintf(stderr, "Matrix size n=%d must be divisible by sqrt(P)=%d\n", n,
-              cart->g_rows);
+              cart->grid_dim);
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
-  int dims[2] = {cart->g_rows, cart->g_cols};
+  int dims[2] = {cart->grid_dim, cart->grid_dim};
   int periods[2] = {0, 0};
   int reorder = 0;
-
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cart->cart_comm);
+
   if (cart->cart_comm == MPI_COMM_NULL) {
     if (cart->my_rank == 0)
       fprintf(stderr, "MPI_Cart_create failed\n");
@@ -48,11 +45,9 @@ void setup_cart(CartInfo *cart, int n) {
 
   int keep[2] = {0, 1};
   MPI_Cart_sub(cart->cart_comm, keep, &cart->row_comm);
-
   keep[0] = 1;
   keep[1] = 0;
   MPI_Cart_sub(cart->cart_comm, keep, &cart->col_comm);
-
   MPI_Comm_rank(cart->row_comm, &cart->row_rank);
 }
 
@@ -133,12 +128,15 @@ int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b) {
   }
   return 0;
 }
+
 int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
+
+  // initialization
   CartInfo cart;
   setup_cart(&cart, w.n);
 
   int n = w.n;
-  int p = cart.g_rows;
+  int p = cart.grid_dim;
   int localN = n / p;
 
   if (b != localN) {
@@ -170,6 +168,8 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
   }
 
   int B = n / b;
+
+  // computation
   for (int k = 0; k < B; k++) {
     int **wkk = get_block(buf->values, k, k, b, n);
     floyd_kernel(wkk, wkk, wkk, b);

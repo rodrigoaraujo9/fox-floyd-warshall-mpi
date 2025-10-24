@@ -21,8 +21,7 @@ typedef struct {
   MPI_Comm col_comm;
   int p_row;
   int p_col;
-  int g_rows;
-  int g_cols;
+  int grid_dim;
   int my_rank;
   int cart_rank;
   int row_rank;

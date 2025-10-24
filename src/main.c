@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 
   CartInfo cart;
   setup_cart(&cart, input.n);
-  int p = cart.g_rows;
+  int p = cart.grid_dim;
   int b = input.n / p;
 
   Matrix rs_out = (Matrix){0};
@@ -118,10 +118,6 @@ int main(int argc, char **argv) {
     destroy_matrix(rs_out);
     destroy_matrix(fw_out);
   }
-
-  MPI_Comm_free(&cart.row_comm);
-  MPI_Comm_free(&cart.col_comm);
-  MPI_Comm_free(&cart.cart_comm);
 
   MPI_Finalize();
   return 0;
