@@ -1,5 +1,6 @@
 #include "../includes/blocked_fw.h"
 #include "../includes/comm.h"
+#include "../includes/io.h"
 #include "../includes/matrix.h"
 #include "../includes/types.h"
 #include <assert.h>
@@ -111,8 +112,6 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
     return 1;
   }
 
-  // int B = cart.q;
-
   int **row_k_buffer = allocate_matrix(b);
   int **col_k_buffer = allocate_matrix(b);
 
@@ -128,12 +127,63 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
     return 1;
   }
 
-  // computing and communication done here
+  for (int k = 0; k < cart.q; k++) {
+    if (cart.my_row == k && cart.my_col == k) {
+      floyd_kernel(local_buf.values, local_buf.values, local_buf.values, b);
+    }
+
+    if (cart.my_row == k && cart.my_col == k) {
+      for (int i = 0; i < b; i++) {
+        memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
+      }
+    }
+
+    if (cart.my_row == k && cart.my_col == k) {
+      for (int i = 0; i < b; i++) {
+        memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
+      }
+    }
+
+    for (int i = 0; i < b; i++) {
+      MPI_Bcast(col_k_buffer[i], b, MPI_INT, k, cart.col_comm);
+    }
+
+    for (int i = 0; i < b; i++) {
+      MPI_Bcast(row_k_buffer[i], b, MPI_INT, k, cart.row_comm);
+    }
+
+    if (cart.my_row == k && cart.my_col != k) {
+      floyd_kernel(local_buf.values, row_k_buffer, local_buf.values, b);
+    }
+
+    if (cart.my_row != k && cart.my_col == k) {
+      floyd_kernel(local_buf.values, local_buf.values, col_k_buffer, b);
+    }
+
+    if (cart.my_row == k) {
+      for (int i = 0; i < b; i++) {
+        memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
+      }
+    }
+    for (int i = 0; i < b; i++) {
+      MPI_Bcast(row_k_buffer[i], b, MPI_INT, k, cart.col_comm);
+    }
+
+    if (cart.my_col == k) {
+      for (int i = 0; i < b; i++) {
+        memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
+      }
+    }
+    for (int i = 0; i < b; i++) {
+      MPI_Bcast(col_k_buffer[i], b, MPI_INT, k, cart.row_comm);
+    }
+
+    if (cart.my_row != k && cart.my_col != k) {
+      floyd_kernel(local_buf.values, col_k_buffer, row_k_buffer, b);
+    }
+  }
 
   gather_matrix(&local_buf, buf, b, &cart);
-
-  // currently here to verify functional correctness
-  blocked_floyd_warshall_apsp(w, buf, b);
 
   destroy_buf(row_k_buffer, b);
   destroy_buf(col_k_buffer, b);
