@@ -1,24 +1,21 @@
 #include "../includes/matrix.h"
 #include "../includes/types.h"
 #include <assert.h>
-#include <string.h>
 #include <limits.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-int allocate_matrix(int **buf, int n) {
-    if (buf == NULL) free(buf);
-    buf = (int**) malloc(sizeof(int*) * n);
-    for (int i = 0; i < n; i++) {
-        buf[i] = (int*) malloc(sizeof(int) * n);
-    }
-    return 0;
-}
-
 void copy_matrix(Matrix src, Matrix *dst) {
-    memcpy(&src.values, &(*dst).values, sizeof(int) * src.n * src.n);
+  dst->n = src.n;
+  dst->values = allocate_matrix(src.n);
+  if (!dst->values)
+    return;
+
+  for (int i = 0; i < src.n; i++) {
+    memcpy(dst->values[i], src.values[i], sizeof(int) * src.n);
+  }
 }
 
 int **allocate_matrix(int n) {

@@ -108,9 +108,9 @@ int main(int argc, char **argv) {
     printf("MPI Blocked FW APSP:   Time = %.6f s (P=%d, p=%d, b=%d)\n", t1 - t0,
            world_size, p, b);
 
-    assert_apsp(mpi_out, output_file_matrix, "MPI Blocked FW APSP");
     assert_apsp(rs_out, output_file_matrix, "Repeated Squaring APSP");
     assert_apsp(fw_out, output_file_matrix, "Floyd–Warshall APSP");
+    assert_apsp(mpi_out, output_file_matrix, "MPI Blocked FW APSP");
   }
 
   destroy_matrix(input);

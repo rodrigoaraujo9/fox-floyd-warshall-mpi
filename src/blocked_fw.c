@@ -129,9 +129,11 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
   }
 
   // computing and communication done here
-  blocked_floyd_warshall_apsp(w, buf, b);
 
   gather_matrix(&local_buf, buf, b, &cart);
+
+  // currently here to verify functional correctness
+  blocked_floyd_warshall_apsp(w, buf, b);
 
   destroy_buf(row_k_buffer, b);
   destroy_buf(col_k_buffer, b);
