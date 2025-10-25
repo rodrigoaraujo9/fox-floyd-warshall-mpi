@@ -27,6 +27,9 @@ test-blocked-small:
 test-mpi-small:
 	mpirun -np 4 ./$(BIN) mpi matrix_examples/input6 matrix_examples/output6
 
+test-mpi-nb-small:
+	mpirun -np 4 ./$(BIN) mpi-nb matrix_examples/input6 matrix_examples/output6
+
 
 #medium
 test-fw-300:
@@ -37,6 +40,9 @@ test-rs-300:
 
 test-mpi-300-4:
 	mpirun -np 4 ./$(BIN) mpi matrix_examples/input300 matrix_examples/output300
+
+test-mpi-nb-300-4:
+	mpirun -np 4 ./$(BIN) mpi-nb matrix_examples/input300 matrix_examples/output300
 
 test-fw-600:
 	./$(BIN) fw matrix_examples/input600 matrix_examples/output600
@@ -50,6 +56,12 @@ test-mpi-600-4:
 test-mpi-600-9:
 	mpirun -np 9 --oversubscribe ./$(BIN) mpi matrix_examples/input600 matrix_examples/output600
 
+test-mpi-nb-600-4:
+	mpirun -np 4 ./$(BIN) mpi-nb matrix_examples/input600 matrix_examples/output600
+
+test-mpi-nb-600-9:
+	mpirun -np 9 --oversubscribe ./$(BIN) mpi-nb matrix_examples/input600 matrix_examples/output600
+
 
 
 #large
@@ -61,6 +73,12 @@ test-mpi-900-9:
 
 test-mpi-900-16:
 	mpirun -np 16 --oversubscribe ./$(BIN) mpi matrix_examples/input900 matrix_examples/output900
+
+test-mpi-nb-900-9:
+	mpirun -np 9 --oversubscribe ./$(BIN) mpi-nb matrix_examples/input900 matrix_examples/output900
+
+test-mpi-nb-900-16:
+	mpirun -np 16 --oversubscribe ./$(BIN) mpi-nb matrix_examples/input900 matrix_examples/output900
 
 test-fw-1200:
 	./$(BIN) fw matrix_examples/input1200 matrix_examples/output1200
@@ -74,23 +92,32 @@ test-mpi-1200-9:
 test-mpi-1200-16:
 	mpirun -np 16 --oversubscribe ./$(BIN) mpi matrix_examples/input1200 matrix_examples/output1200
 
+test-mpi-nb-1200-4:
+	mpirun -np 4 ./$(BIN) mpi-nb matrix_examples/input1200 matrix_examples/output1200
+
+test-mpi-nb-1200-9:
+	mpirun -np 9 --oversubscribe ./$(BIN) mpi-nb matrix_examples/input1200 matrix_examples/output1200
+
+test-mpi-nb-1200-16:
+	mpirun -np 16 --oversubscribe ./$(BIN) mpi-nb matrix_examples/input1200 matrix_examples/output1200
+
 
 #compare
-compare-300: test-fw-300 test-rs-300 test-mpi-300-4
+compare-300: test-fw-300 test-rs-300 test-mpi-300-4 test-mpi-nb-300-4
 
-compare-600: test-fw-600 test-rs-600 test-mpi-600-4 test-mpi-600-9
+compare-600: test-fw-600 test-rs-600 test-mpi-600-4 test-mpi-600-9 test-mpi-nb-600-4 test-mpi-nb-600-9
 
-compare-900: test-fw-900 test-mpi-900-9 test-mpi-900-16
+compare-900: test-fw-900 test-mpi-900-9 test-mpi-900-16 test-mpi-nb-900-9 test-mpi-nb-900-16
 
-compare-1200: test-fw-1200 test-mpi-1200-4 test-mpi-1200-9 test-mpi-1200-16
+compare-1200: test-fw-1200 test-mpi-1200-4 test-mpi-1200-9 test-mpi-1200-16 test-mpi-nb-1200-4 test-mpi-nb-1200-9 test-mpi-nb-1200-16
 
 #scale (processes)
-scale-600: test-mpi-600-4 test-mpi-600-9
+scale-600: test-mpi-600-4 test-mpi-600-9 test-mpi-nb-600-4 test-mpi-nb-600-9
 
-scale-1200: test-mpi-1200-4 test-mpi-1200-9 test-mpi-1200-16
+scale-1200: test-mpi-1200-4 test-mpi-1200-9 test-mpi-1200-16 test-mpi-nb-1200-4 test-mpi-nb-1200-9 test-mpi-nb-1200-16
 
 #test all
-test-all-small: test-fw-small test-rs-small test-blocked-small test-mpi-small
+test-all-small: test-fw-small test-rs-small test-blocked-small test-mpi-small test-mpi-nb-small
 
 test-all-medium: compare-300 compare-600
 

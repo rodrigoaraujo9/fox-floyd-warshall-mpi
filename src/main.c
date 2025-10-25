@@ -1,6 +1,5 @@
 #include "../includes/algorithms.h"
 #include "../includes/blocked_fw.h"
-#include "../includes/comm.h"
 #include "../includes/io.h"
 #include "../includes/matrix.h"
 #include "../includes/types.h"
@@ -16,7 +15,8 @@ typedef enum {
   ALG_REPEATED_SQUARING,
   ALG_FLOYD_WARSHALL,
   ALG_BLOCKED_FW,
-  ALG_BLOCKED_FW_MPI
+  ALG_BLOCKED_FW_MPI,
+  ALG_BLOCKED_FW_MPI_NON_BLOCKING
 } Algorithm;
 
 int main(int argc, char **argv) {
@@ -41,7 +41,6 @@ int main(int argc, char **argv) {
   char *input_file = argv[2];
   char *output_file = argv[3];
 
-  // Parse algorithm
   Algorithm alg;
   if (strcmp(alg_name, "slow") == 0) {
     alg = ALG_SLOW;
@@ -53,6 +52,8 @@ int main(int argc, char **argv) {
     alg = ALG_BLOCKED_FW;
   } else if (strcmp(alg_name, "mpi") == 0) {
     alg = ALG_BLOCKED_FW_MPI;
+  } else if (strcmp(alg_name, "mpi-nb") == 0) {
+    alg = ALG_BLOCKED_FW_MPI_NON_BLOCKING;
   } else {
     if (world_rank == 0) {
       fprintf(stderr, "alg not supported!");
@@ -61,9 +62,9 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // Read input matrix (all ranks for MPI, rank 0 only for others)
   Matrix input = {NULL, 0};
-  if (alg == ALG_BLOCKED_FW_MPI || world_rank == 0) {
+  if (alg == ALG_BLOCKED_FW_MPI || alg == ALG_BLOCKED_FW_MPI_NON_BLOCKING ||
+      world_rank == 0) {
     input = read_input_matrix_from_file(input_file);
     if (input.values == NULL) {
       if (world_rank == 0)
@@ -73,7 +74,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  // Read expected output (rank 0 only)
   Matrix expected = {NULL, 0};
   if (world_rank == 0) {
     int n = input.n;
@@ -86,16 +86,12 @@ int main(int argc, char **argv) {
     }
   }
 
-  // Run algorithm
   Matrix result = {NULL, 0};
   double t0, t1;
   int rc = 0;
 
   if (alg == ALG_BLOCKED_FW_MPI) {
-    // parallel alg
-    CartInfo cart;
-    setup_cart(&cart, input.n);
-    int b = (int)(input.n / sqrt(cart.p));
+    int b = (int)(input.n / sqrt(world_size));
 
     MPI_Barrier(MPI_COMM_WORLD);
     t0 = MPI_Wtime();
@@ -105,8 +101,18 @@ int main(int argc, char **argv) {
     if (world_rank == 0) {
       printf("%s,%d,%.6f,%d,%d\n", alg_name, input.n, t1 - t0, world_size, b);
     }
+  } else if (alg == ALG_BLOCKED_FW_MPI_NON_BLOCKING) {
+    int b = (int)(input.n / sqrt(world_size));
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    t0 = MPI_Wtime();
+    rc = blocked_floyd_warshall_p_non_blocking_apsp(input, &result, b);
+    t1 = MPI_Wtime();
+
+    if (world_rank == 0) {
+      printf("%s,%d,%.6f,%d,%d\n", alg_name, input.n, t1 - t0, world_size, b);
+    }
   } else {
-    // seq algorythm
     if (world_rank == 0) {
       t0 = MPI_Wtime();
 
@@ -141,12 +147,10 @@ int main(int argc, char **argv) {
     }
   }
 
-  // verify res
   if (world_rank == 0 && rc == 0) {
     assert_apsp(result, expected, alg_name);
   }
 
-  // cleanup
   destroy_matrix(input);
   if (world_rank == 0) {
     destroy_matrix(expected);
