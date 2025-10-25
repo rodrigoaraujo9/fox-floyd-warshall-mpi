@@ -4,21 +4,20 @@
 #include "../includes/io.h"
 #include "../includes/matrix.h"
 #include "../includes/types.h"
-#include <assert.h>
 #include <limits.h>
 #include <math.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-IO_Files io_files[] = {
-    {.i = "matrix_examples/input5", .o = "matrix_examples/output5"},
-    {.i = "matrix_examples/input6", .o = "matrix_examples/output6"},
-    {.i = "matrix_examples/input300", .o = "matrix_examples/output300"},
-    {.i = "matrix_examples/input600", .o = "matrix_examples/output600"},
-    {.i = "matrix_examples/input900", .o = "matrix_examples/output900"},
-    {.i = "matrix_examples/input1200", .o = "matrix_examples/output1200"},
-};
+typedef enum {
+  ALG_SLOW,
+  ALG_REPEATED_SQUARING,
+  ALG_FLOYD_WARSHALL,
+  ALG_BLOCKED_FW,
+  ALG_BLOCKED_FW_MPI
+} Algorithm;
 
 int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
@@ -27,100 +26,133 @@ int main(int argc, char **argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-  if (argc != 3) {
+  if (argc != 4) {
     if (world_rank == 0) {
-      fprintf(stderr, "Usage: %s <input_matrix> <expected_output>\n", argv[0]);
+      fprintf(stderr,
+              "Usage: %s <algorithm> <input_matrix> <expected_output> -> "
+              "algorithm {slow, rs , fw, blocked}\n",
+              argv[0]);
     }
     MPI_Finalize();
     return 1;
   }
 
-  Matrix input = read_input_matrix_from_file(argv[1]);
-  if (input.values == NULL) {
-    if (world_rank == 0)
-      fprintf(stderr, "Failed to read input matrix: %s\n", argv[1]);
+  char *alg_name = argv[1];
+  char *input_file = argv[2];
+  char *output_file = argv[3];
+
+  // Parse algorithm
+  Algorithm alg;
+  if (strcmp(alg_name, "slow") == 0) {
+    alg = ALG_SLOW;
+  } else if (strcmp(alg_name, "rs") == 0) {
+    alg = ALG_REPEATED_SQUARING;
+  } else if (strcmp(alg_name, "fw") == 0) {
+    alg = ALG_FLOYD_WARSHALL;
+  } else if (strcmp(alg_name, "blocked") == 0) {
+    alg = ALG_BLOCKED_FW;
+  } else if (strcmp(alg_name, "mpi") == 0) {
+    alg = ALG_BLOCKED_FW_MPI;
+  } else {
+    if (world_rank == 0) {
+      fprintf(stderr, "alg not supported!");
+    }
     MPI_Finalize();
     return 1;
   }
-  Matrix output_file_matrix = read_output_matrix_from_file(argv[2], input.n);
-  if (output_file_matrix.values == NULL) {
-    if (world_rank == 0)
-      fprintf(stderr, "Failed to read expected matrix: %s\n", argv[2]);
-    destroy_matrix(input);
-    MPI_Finalize();
-    return 1;
+
+  // Read input matrix (all ranks for MPI, rank 0 only for others)
+  Matrix input = {NULL, 0};
+  if (alg == ALG_BLOCKED_FW_MPI || world_rank == 0) {
+    input = read_input_matrix_from_file(input_file);
+    if (input.values == NULL) {
+      if (world_rank == 0)
+        fprintf(stderr, "Failed to read input matrix: %s\n", input_file);
+      MPI_Finalize();
+      return 1;
+    }
   }
 
-  CartInfo cart;
-  setup_cart(&cart, input.n);
-  int p = cart.p;
-  int b = (int)(input.n / sqrt(p));
+  // Read expected output (rank 0 only)
+  Matrix expected = {NULL, 0};
+  if (world_rank == 0) {
+    int n = input.n;
+    expected = read_output_matrix_from_file(output_file, n);
+    if (expected.values == NULL) {
+      fprintf(stderr, "Failed to read expected matrix: %s\n", output_file);
+      destroy_matrix(input);
+      MPI_Finalize();
+      return 1;
+    }
+  }
 
-  Matrix rs_out = (Matrix){0};
-  Matrix fw_out = (Matrix){0};
-
+  // Run algorithm
+  Matrix result = {NULL, 0};
   double t0, t1;
+  int rc = 0;
 
-  if (world_rank == 0) {
+  if (alg == ALG_BLOCKED_FW_MPI) {
+    // parallel alg
+    CartInfo cart;
+    setup_cart(&cart, input.n);
+    int b = (int)(input.n / sqrt(cart.p));
+
+    MPI_Barrier(MPI_COMM_WORLD);
     t0 = MPI_Wtime();
-    if (repeated_squaring_apsp(input, &rs_out) != 0) {
-      fprintf(stderr, "Repeated Squaring APSP failed\n");
-      destroy_matrix(input);
-      destroy_matrix(output_file_matrix);
-      MPI_Finalize();
-      return 1;
-    }
+    rc = blocked_floyd_warshall_p_apsp(input, &result, b);
     t1 = MPI_Wtime();
-    printf("Repeated Squaring APSP: Time = %.6f s\n", t1 - t0);
 
-    t0 = MPI_Wtime();
-    if (floyd_warshall_apsp(input, &fw_out) != 0) {
-      fprintf(stderr, "Floyd–Warshall APSP failed\n");
-      destroy_matrix(input);
-      destroy_matrix(output_file_matrix);
-      destroy_matrix(rs_out);
-      MPI_Finalize();
-      return 1;
-    }
-    t1 = MPI_Wtime();
-    printf("Floyd–Warshall APSP:   Time = %.6f s\n", t1 - t0);
-  }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  Matrix mpi_out = (Matrix){0};
-  t0 = MPI_Wtime();
-  int rc = blocked_floyd_warshall_p_apsp(input, &mpi_out, b);
-  t1 = MPI_Wtime();
-  if (rc != 0) {
-    if (world_rank == 0)
-      fprintf(stderr, "MPI Blocked FW APSP failed\n");
-    destroy_matrix(input);
-    destroy_matrix(output_file_matrix);
     if (world_rank == 0) {
-      destroy_matrix(rs_out);
-      destroy_matrix(fw_out);
+      printf("%s,%d,%.6f,%d,%d\n", alg_name, input.n, t1 - t0, world_size, b);
     }
-    MPI_Finalize();
-    return 1;
+  } else {
+    // seq algorythm
+    if (world_rank == 0) {
+      t0 = MPI_Wtime();
+
+      switch (alg) {
+      case ALG_SLOW:
+        rc = slow_apsp(input, &result);
+        break;
+      case ALG_REPEATED_SQUARING:
+        rc = repeated_squaring_apsp(input, &result);
+        break;
+      case ALG_FLOYD_WARSHALL:
+        rc = floyd_warshall_apsp(input, &result);
+        break;
+      case ALG_BLOCKED_FW: {
+        int b = (int)sqrt(input.n);
+        while (input.n % b != 0)
+          b--;
+        rc = blocked_floyd_warshall_apsp(input, &result, b);
+        break;
+      }
+      default:
+        rc = 1;
+      }
+
+      t1 = MPI_Wtime();
+
+      if (rc != 0) {
+        fprintf(stderr, "Algorithm failed\n");
+      } else {
+        printf("%s,%d,%.6f\n", alg_name, input.n, t1 - t0);
+      }
+    }
   }
 
-  if (world_rank == 0) {
-    printf("MPI Blocked FW APSP:   Time = %.6f s (P=%d, p=%d, b=%d)\n", t1 - t0,
-           world_size, p, b);
-
-    assert_apsp(rs_out, output_file_matrix, "Repeated Squaring APSP");
-    assert_apsp(fw_out, output_file_matrix, "Floyd–Warshall APSP");
-    assert_apsp(mpi_out, output_file_matrix, "MPI Blocked FW APSP");
+  // verify res
+  if (world_rank == 0 && rc == 0) {
+    assert_apsp(result, expected, alg_name);
   }
 
+  // cleanup
   destroy_matrix(input);
-  destroy_matrix(output_file_matrix);
-  destroy_matrix(mpi_out);
   if (world_rank == 0) {
-    destroy_matrix(rs_out);
-    destroy_matrix(fw_out);
+    destroy_matrix(expected);
   }
+  destroy_matrix(result);
 
   MPI_Finalize();
-  return 0;
+  return rc;
 }
