@@ -208,7 +208,6 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
     return 1;
   }
 
-  // Allocate contiguous buffers for better communication performance
   int *row_k_flat = (int *)malloc(b * b * sizeof(int));
   int *col_k_flat = (int *)malloc(b * b * sizeof(int));
   int **row_k_buffer = (int **)malloc(b * sizeof(int *));
@@ -238,7 +237,6 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
   MPI_Request row_req, col_req;
 
   for (int k = 0; k < cart.q; k++) {
-    // Step 1: Diagonal block computation
     if (cart.my_row == k && cart.my_col == k) {
       floyd_kernel(local_buf.values, local_buf.values, local_buf.values, b);
       for (int i = 0; i < b; i++) {
@@ -246,15 +244,12 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
         memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
       }
     }
-
-    // Step 2: Broadcast diagonal block (single call per buffer)
     MPI_Ibcast(row_k_flat, b * b, MPI_INT, k, cart.row_comm, &row_req);
     MPI_Ibcast(col_k_flat, b * b, MPI_INT, k, cart.col_comm, &col_req);
 
     MPI_Wait(&row_req, MPI_STATUS_IGNORE);
     MPI_Wait(&col_req, MPI_STATUS_IGNORE);
 
-    // Step 3: Update blocks in row k and column k
     if (cart.my_row == k && cart.my_col != k) {
       floyd_kernel(local_buf.values, row_k_buffer, local_buf.values, b);
     }
@@ -263,7 +258,6 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
       floyd_kernel(local_buf.values, local_buf.values, col_k_buffer, b);
     }
 
-    // Step 4: Broadcast updated blocks for final computation
     if (cart.my_row == k) {
       for (int i = 0; i < b; i++)
         memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
@@ -279,7 +273,6 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
     MPI_Wait(&row_req, MPI_STATUS_IGNORE);
     MPI_Wait(&col_req, MPI_STATUS_IGNORE);
 
-    // Step 5: Update all other blocks
     if (cart.my_row != k && cart.my_col != k) {
       floyd_kernel(local_buf.values, col_k_buffer, row_k_buffer, b);
     }
