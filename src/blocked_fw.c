@@ -146,9 +146,6 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
 
     for (int i = 0; i < b; i++) {
       MPI_Bcast(col_k_buffer[i], b, MPI_INT, k, cart.col_comm);
-    }
-
-    for (int i = 0; i < b; i++) {
       MPI_Bcast(row_k_buffer[i], b, MPI_INT, k, cart.row_comm);
     }
 
@@ -160,22 +157,13 @@ int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b) {
       floyd_kernel(local_buf.values, local_buf.values, col_k_buffer, b);
     }
 
-    if (cart.my_row == k) {
-      for (int i = 0; i < b; i++) {
-        memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
-      }
-    }
-    for (int i = 0; i < b; i++) {
-      MPI_Bcast(row_k_buffer[i], b, MPI_INT, k, cart.col_comm);
-    }
 
-    if (cart.my_col == k) {
-      for (int i = 0; i < b; i++) {
-        memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
-      }
-    }
     for (int i = 0; i < b; i++) {
-      MPI_Bcast(col_k_buffer[i], b, MPI_INT, k, cart.row_comm);
+        if (cart.my_row == k) memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
+        if (cart.my_col == k) memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
+
+        MPI_Bcast(row_k_buffer[i], b, MPI_INT, k, cart.col_comm);
+        MPI_Bcast(col_k_buffer[i], b, MPI_INT, k, cart.row_comm);
     }
 
     if (cart.my_row != k && cart.my_col != k) {
