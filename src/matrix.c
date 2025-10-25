@@ -2,8 +2,10 @@
 #include "../includes/types.h"
 #include <assert.h>
 #include <limits.h>
+#include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void copy_matrix(Matrix src, Matrix *dst) {
   dst->n = src.n;
@@ -14,6 +16,35 @@ void copy_matrix(Matrix src, Matrix *dst) {
       dst->values[i][j] = src.values[i][j];
     }
   }
+}
+
+int **allocate_matrix(int n) {
+  int **matrix = (int **)malloc(n * sizeof(int *));
+  if (!matrix)
+    return NULL;
+
+  for (int i = 0; i < n; i++) {
+    matrix[i] = (int *)malloc(n * sizeof(int));
+    if (!matrix[i]) {
+      // Cleanup on failure
+      for (int j = 0; j < i; j++) {
+        free(matrix[j]);
+      }
+      free(matrix);
+      return NULL;
+    }
+  }
+  return matrix;
+}
+
+void destroy_buf(int **buf, int n) {
+  if (!buf)
+    return;
+
+  for (int i = 0; i < n; i++) {
+    free(buf[i]);
+  }
+  free(buf);
 }
 
 void destroy_matrix(Matrix m) {

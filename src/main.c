@@ -1,10 +1,12 @@
 #include "../includes/algorithms.h"
 #include "../includes/blocked_fw.h"
+#include "../includes/comm.h"
 #include "../includes/io.h"
 #include "../includes/matrix.h"
 #include "../includes/types.h"
 #include <assert.h>
 #include <limits.h>
+#include <math.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,7 +54,7 @@ int main(int argc, char **argv) {
   CartInfo cart;
   setup_cart(&cart, input.n);
   int p = cart.p;
-  int b = input.n / p;
+  int b = (int)(input.n / sqrt(p));
 
   Matrix rs_out = (Matrix){0};
   Matrix fw_out = (Matrix){0};

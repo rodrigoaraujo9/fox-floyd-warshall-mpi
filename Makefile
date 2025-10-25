@@ -1,7 +1,7 @@
 CC      := mpicc
 CFLAGS  := -O3 -std=c11 -Wall -Wextra -Wno-unused-parameter
 INCLUDE := -Iinclude
-SRC_COMMON := src/io.c src/matrix.c src/algorithms.c src/blocked_fw.c
+SRC_COMMON := src/io.c src/matrix.c src/algorithms.c src/comm.c src/blocked_fw.c
 BIN     := apsp
 
 all: $(BIN)

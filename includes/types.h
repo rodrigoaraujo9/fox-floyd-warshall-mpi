@@ -20,7 +20,7 @@ typedef struct {
   MPI_Comm comm;     // 2D Cartesian communicator
   MPI_Comm row_comm; // subcomm for my row (broadcast A in Fox)
   MPI_Comm col_comm; // subcomm for my column (optional sync/shift of B)
-  int q;             // sqrt(p)
+  int q;             // sqrt(p) -> num rows = num cols in the grid
   int my_row;        // row coordinate in the grid
   int my_col;        // col coordinate in the grid
   int my_rank;       // rank in MPI_COMM_WORLD

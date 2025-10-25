@@ -3,13 +3,7 @@
 
 #include "types.h"
 
-void setup_cart(CartInfo *cart, int n);
-
 int **get_block(int **matrix, int b_row, int b_col, int b, int n);
-
-int broadcast_block_to_row(int **block_A, int **new_block, int na, int ma,
-                           int step, CartInfo *cart);
-int circular_shift(int **block_B, int mb, int nb, CartInfo *cart);
 
 int blocked_floyd_warshall_apsp(Matrix w, Matrix *buf, int b);
 int blocked_floyd_warshall_p_apsp(Matrix w, Matrix *buf, int b);
