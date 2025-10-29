@@ -207,18 +207,21 @@ int main(int argc, char **argv) {
 
   if (alg == ALG_BLOCKED_FW_MPI) {
     block_size = (int)(input.n / sqrt(world_size));
+    flush_cache();
     MPI_Barrier(MPI_COMM_WORLD);
     t0 = MPI_Wtime();
     rc = blocked_floyd_warshall_p_apsp(input, &result, block_size);
     t1 = MPI_Wtime();
   } else if (alg == ALG_BLOCKED_FW_MPI_NON_BLOCKING) {
     block_size = (int)(input.n / sqrt(world_size));
+    flush_cache();
     MPI_Barrier(MPI_COMM_WORLD);
     t0 = MPI_Wtime();
     rc = blocked_floyd_warshall_p_non_blocking_apsp(input, &result, block_size);
     t1 = MPI_Wtime();
   } else {
     if (world_rank == 0) {
+      flush_cache();
       t0 = MPI_Wtime();
       switch (alg) {
       case ALG_SLOW:

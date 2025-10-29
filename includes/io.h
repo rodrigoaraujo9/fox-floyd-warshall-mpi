@@ -6,5 +6,6 @@
 Matrix read_input_matrix_from_file(char *file_path);
 Matrix read_output_matrix_from_file(char *file_path, int n);
 void print_matrix(Matrix matrix, char *title);
+void flush_cache();
 
 #endif // IO_H

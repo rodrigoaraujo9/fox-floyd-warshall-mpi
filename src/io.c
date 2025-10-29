@@ -67,3 +67,16 @@ void print_matrix(Matrix matrix, char *title) {
     printf("\n");
   }
 }
+
+void flush_cache() {
+  const size_t size = 20 * 1024 * 1024; // 20 MB
+  char *c = malloc(size);
+  if (c) {
+    for (size_t i = 0; i < size; i++) {
+      c[i] = i;
+    }
+    volatile char dummy = c[size - 1];
+    free(c);
+    (void)dummy;
+  }
+}
