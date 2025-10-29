@@ -194,29 +194,24 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
   setup_cart(&cart, w.n);
   int n = w.n;
   int localN = n / cart.q;
-
   if (b != localN) {
     if (cart.my_rank == 0) {
       fprintf(stderr, "Set b == n/sqrt(P) (got b=%d, need %d)\n", b, localN);
     }
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
-
   Matrix local_buf;
   distribute_matrix(w, &local_buf, b, &cart);
-
   if (!local_buf.values) {
     MPI_Comm_free(&cart.row_comm);
     MPI_Comm_free(&cart.col_comm);
     MPI_Comm_free(&cart.comm);
     return 1;
   }
-
   int *row_k_flat = (int *)malloc(b * b * sizeof(int));
   int *col_k_flat = (int *)malloc(b * b * sizeof(int));
   int **row_k_buffer = (int **)malloc(b * sizeof(int *));
   int **col_k_buffer = (int **)malloc(b * sizeof(int *));
-
   if (!row_k_flat || !col_k_flat || !row_k_buffer || !col_k_buffer) {
     if (row_k_flat)
       free(row_k_flat);
@@ -232,14 +227,11 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
     MPI_Comm_free(&cart.comm);
     return 1;
   }
-
   for (int i = 0; i < b; i++) {
     row_k_buffer[i] = &row_k_flat[i * b];
     col_k_buffer[i] = &col_k_flat[i * b];
   }
-
-  MPI_Request row_req, col_req;
-
+  MPI_Request row_req[2], col_req[2];
   for (int k = 0; k < cart.q; k++) {
     if (cart.my_row == k && cart.my_col == k) {
       floyd_kernel(local_buf.values, local_buf.values, local_buf.values, b);
@@ -248,49 +240,46 @@ int blocked_floyd_warshall_p_non_blocking_apsp(Matrix w, Matrix *buf, int b) {
         memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
       }
     }
-    MPI_Ibcast(row_k_flat, b * b, MPI_INT, k, cart.row_comm, &row_req);
-    MPI_Ibcast(col_k_flat, b * b, MPI_INT, k, cart.col_comm, &col_req);
+    MPI_Ibcast(row_k_flat, b * b, MPI_INT, k, cart.row_comm, &row_req[0]);
+    MPI_Ibcast(col_k_flat, b * b, MPI_INT, k, cart.col_comm, &col_req[0]);
 
-    MPI_Wait(&row_req, MPI_STATUS_IGNORE);
-    MPI_Wait(&col_req, MPI_STATUS_IGNORE);
+    MPI_Wait(&row_req[0], MPI_STATUS_IGNORE);
+    MPI_Wait(&col_req[0], MPI_STATUS_IGNORE);
 
     if (cart.my_row == k && cart.my_col != k) {
       floyd_kernel(local_buf.values, row_k_buffer, local_buf.values, b);
-    }
-
-    if (cart.my_row != k && cart.my_col == k) {
-      floyd_kernel(local_buf.values, local_buf.values, col_k_buffer, b);
-    }
-
-    if (cart.my_row == k) {
       for (int i = 0; i < b; i++)
         memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
     }
-    if (cart.my_col == k) {
+    if (cart.my_row != k && cart.my_col == k) {
+      floyd_kernel(local_buf.values, local_buf.values, col_k_buffer, b);
       for (int i = 0; i < b; i++)
         memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
     }
 
-    MPI_Ibcast(row_k_flat, b * b, MPI_INT, k, cart.col_comm, &row_req);
-    MPI_Ibcast(col_k_flat, b * b, MPI_INT, k, cart.row_comm, &col_req);
+    MPI_Ibcast(row_k_flat, b * b, MPI_INT, k, cart.col_comm, &row_req[1]);
+    MPI_Ibcast(col_k_flat, b * b, MPI_INT, k, cart.row_comm, &col_req[1]);
 
-    MPI_Wait(&row_req, MPI_STATUS_IGNORE);
-    MPI_Wait(&col_req, MPI_STATUS_IGNORE);
+    if (cart.my_row == k && cart.my_col == k) {
+      for (int i = 0; i < b; i++) {
+        memcpy(row_k_buffer[i], local_buf.values[i], b * sizeof(int));
+        memcpy(col_k_buffer[i], local_buf.values[i], b * sizeof(int));
+      }
+    }
+
+    MPI_Wait(&row_req[1], MPI_STATUS_IGNORE);
+    MPI_Wait(&col_req[1], MPI_STATUS_IGNORE);
 
     if (cart.my_row != k && cart.my_col != k) {
       floyd_kernel(local_buf.values, col_k_buffer, row_k_buffer, b);
     }
   }
-
   free(row_k_flat);
   free(col_k_flat);
   free(row_k_buffer);
   free(col_k_buffer);
-
   gather_matrix(&local_buf, buf, b, &cart);
-
   destroy_buf(local_buf.values, b);
-
   MPI_Comm_free(&cart.row_comm);
   MPI_Comm_free(&cart.col_comm);
   MPI_Comm_free(&cart.comm);
