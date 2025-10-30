@@ -1,0 +1,53 @@
+# Extract Data Summary
+# Entries ingested: 366
+
+=== TABLE 1: Sequential Baseline Performance ===
+Algorithm & Graph A (300) & Graph B (600) & Graph C (900) & Graph D (1200) \\
+\hline
+Repeated Squaring & 291.9 & 1957.1 & 6651.5 & 17392.6 \\
+Standard Floyd-Warshall & 37.9 & 166.1 & 543.8 & 1281.1 \\
+Blocked Floyd-Warshall & 33.9 & 132.7 & 412.6 & 965.8 \\
+
+=== TABLE 2: Parallel Performance - Blocking ===
+Graph & P=1 & P=4 & P=9 & P=16 & P=25 \\
+\hline
+A (300) & 29.4 & 80.1 & 72.1 & 61.2 & 107.5 \\
+B (600) & 115.6 & 328.4 & 247.2 & 209.3 & 478.9 \\
+C (900) & 373.5 & 846.0 & 578.5 & 617.5 & 665.7 \\
+D (1200) & 876.7 & 1672.6 & 1095.4 & 960.3 & 1288.7 \\
+
+=== TABLE 3: Parallel Performance - Non-Blocking ===
+Graph & P=1 & P=4 & P=9 & P=16 & P=25 \\
+\hline
+A (300) & 38.9 & 74.2 & 60.3 & 54.8 & 87.1 \\
+B (600) & 168.2 & 314.6 & 217.5 & 184.6 & 419.7 \\
+C (900) & 546.9 & 830.2 & 518.8 & 434.6 & 601.4 \\
+D (1200) & 1285.3 & 1661.4 & 1011.5 & 757.0 & 1047.2 \\
+
+=== TABLE 4: Speedup Relative to Sequential Blocked ===
+Graph & P=1 & P=4 & P=9 & P=16 & P=25 \\
+\hline
+A (300) & 1.15 & 0.42 & 0.47 & 0.55 & 0.32 \\
+B (600) & 1.15 & 0.40 & 0.54 & 0.63 & 0.28 \\
+C (900) & 1.10 & 0.49 & 0.71 & 0.67 & 0.62 \\
+D (1200) & 1.10 & 0.58 & 0.88 & 1.01 & 0.75 \\
+
+=== TABLE 5: Parallel Efficiency ===
+Graph & P=4 & P=9 & P=16 & P=25 \\
+\hline
+A (300) & 10.6\% & 5.2\% & 3.5\% & 1.3\% \\
+B (600) & 10.1\% & 6.0\% & 4.0\% & 1.1\% \\
+C (900) & 12.2\% & 7.9\% & 4.2\% & 2.5\% \\
+D (1200) & 14.4\% & 9.8\% & 6.3\% & 3.0\% \\
+
+=== TABLE 6: Communication Overhead (% of total time) ===
+Graph & P=4 & P=9 & P=16 & P=25 \\
+\hline
+A (300) & 89.4\% & 94.8\% & 96.5\% & 98.7\% \\
+B (600) & 89.9\% & 94.0\% & 96.0\% & 98.9\% \\
+C (900) & 87.8\% & 92.1\% & 95.8\% & 97.5\% \\
+D (1200) & 85.6\% & 90.2\% & 93.7\% & 97.0\% \\
+
+Data saved to report_data/speedup_data.csv
+
+All tables generated successfully!
