@@ -188,15 +188,15 @@ report: tables plots
 # ===== Python dependencies quick check =====
 deps-check:
 	$(PYTHON) - <<'PY'
-import sys, importlib
-missing=[]
-for p in ("pandas","matplotlib","numpy"):
-    try: importlib.import_module(p)
-    except ImportError: missing.append(p)
-if missing:
-    sys.exit("Missing: "+", ".join(missing)+"  -> run: pip3 install --user "+ " ".join(missing))
-print("Python deps OK")
-PY
+	import sys, importlib
+	missing=[]
+	for p in ("pandas","matplotlib","numpy"):
+		try: importlib.import_module(p)
+		except ImportError: missing.append(p)
+	if missing:
+		sys.exit("Missing: "+", ".join(missing)+"  -> run: pip3 install --user "+ " ".join(missing))
+	print("Python deps OK")
+	PY
 
 # ===== Helpers =====
 slots:

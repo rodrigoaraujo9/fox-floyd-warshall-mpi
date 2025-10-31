@@ -12,15 +12,29 @@
 #include <sys/stat.h>
 #include <time.h>
 
+/**
+ * @enum Algorithm
+ * @brief Enumeration of supported APSP algorithm variants.
+ */
 typedef enum {
-  ALG_SLOW,
-  ALG_REPEATED_SQUARING,
-  ALG_FLOYD_WARSHALL,
-  ALG_BLOCKED_FW,
-  ALG_BLOCKED_FW_MPI,
-  ALG_BLOCKED_FW_MPI_NON_BLOCKING
+    ALG_SLOW, /**< Naive O(n⁴) algorithm */
+    ALG_REPEATED_SQUARING, /**< Repeated squaring (matrix multiplication–based) */
+    ALG_FLOYD_WARSHALL, /**< Classic Floyd–Warshall algorithm */
+    ALG_BLOCKED_FW, /**< Cache-blocked Floyd–Warshall algorithm */
+    ALG_BLOCKED_FW_MPI, /**< Parallel blocked Floyd–Warshall using MPI (blocking) */
+    ALG_BLOCKED_FW_MPI_NON_BLOCKING /**< Parallel blocked Floyd–Warshall using MPI (non-blocking) */
 } Algorithm;
 
+/**
+ * @brief Creates the output directory for result logs if it doesn't exist.
+ *
+ * Ensures that the results/ directory is present before attempting to write CSV
+ * benchmark logs. If the directory does not exist, it is created with permissions 0755.
+ *
+ * @note Does nothing if the directory already exists.
+ * @warning Fails silently if directory creation is not permitted.
+ * @see log_result_to_file
+ */
 void create_results_dir() {
   struct stat st = {0};
   if (stat("results", &st) == -1) {
@@ -28,6 +42,22 @@ void create_results_dir() {
   }
 }
 
+/**
+ * @brief Appends a benchmark result entry to a CSV file.
+ *
+ * Records algorithm execution results including timestamp, algorithm name,
+ * matrix size, elapsed time, number of MPI processes, and block size.
+ *
+ * @param alg_name Algorithm name (e.g., "fw", "mpi", etc.)
+ * @param n Matrix size (dimension n × n)
+ * @param exec_time Execution time in seconds
+ * @param world_size Number of MPI processes (1 for sequential)
+ * @param block_size Block size used (0 if not applicable)
+ *
+ * @note Automatically creates results/ directory if missing.
+ * @note If the file is new, a CSV header is written.
+ * @warning File I/O errors are ignored silently.
+ */
 void log_result_to_file(const char *alg_name, int n, double exec_time,
                         int world_size, int block_size) {
   char filename[256];
@@ -74,6 +104,22 @@ void log_result_to_file(const char *alg_name, int n, double exec_time,
   }
 }
 
+/**
+ * @brief Prints a formatted summary of benchmark results to stdout.
+ *
+ * Displays algorithm configuration, execution time, performance metrics
+ * (GFLOPs), and verification results in a readable ASCII banner.
+ *
+ * @param alg_name Algorithm name
+ * @param n Matrix dimension
+ * @param exec_time Execution time in seconds
+ * @param world_size Number of MPI processes
+ * @param block_size Block size used (if applicable)
+ * @param passed 1 if verification succeeded, 0 otherwise
+ *
+ * @note Also prints efficiency per process for parallel runs.
+ * @see log_result_to_file
+ */
 void print_result_banner(const char *alg_name, int n, double exec_time,
                          int world_size, int block_size, int passed) {
   printf("\n");
