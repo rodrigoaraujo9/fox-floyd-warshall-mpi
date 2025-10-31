@@ -5,7 +5,6 @@ from pathlib import Path
 
 st.set_page_config(
     page_title="APSP Performance Dashboard",
-    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -131,14 +130,31 @@ def main():
 
     st.header("Key Results")
 
-    fastest = filtered.loc[filtered["time_sec"].idxmin()]
     speedup_df = calculate_speedup(filtered)
+    
+    largest_size = filtered["matrix_size"].max()
+    largest_df = filtered[filtered["matrix_size"] == largest_size]
+    best_large = largest_df.groupby("algorithm")["time_sec"].median().idxmin()
+    best_large_time = largest_df[largest_df["algorithm"] == best_large]["time_sec"].median()
+    
+    best_speedup = speedup_df[speedup_df["processes"] > 1].loc[speedup_df[speedup_df["processes"] > 1]["speedup"].idxmax()]
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Fastest Run", f"{fastest['time_sec']:.3f}s")
-    col2.metric("Best Algorithm", format_algorithm_name(fastest["algorithm"]))
-    col3.metric("Best Config", f"n={int(fastest['matrix_size'])}, p={int(fastest['processes'])}")
-    col4.metric("Max Speedup", f"{speedup_df['speedup'].max():.2f}×")
+    col1, col2, col3 = st.columns(3)
+    col1.metric(
+        "Best for Large Inputs", 
+        format_algorithm_name(best_large),
+        f"{best_large_time:.3f}s (n={int(largest_size)})"
+    )
+    col2.metric(
+        "Max Speedup", 
+        f"{best_speedup['speedup']:.2f}×",
+        f"{format_algorithm_name(best_speedup['algorithm'])} @ p={int(best_speedup['processes'])}"
+    )
+    col3.metric(
+        "Total Algorithms", 
+        len(filtered["algorithm"].unique()),
+        f"{len(filtered)} total runs"
+    )
 
     st.markdown("---")
 
